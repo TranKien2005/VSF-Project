@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Local IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Sensitive / large video data and generated review artifacts
+data/raw/**
+data/inventory/**
+data/manifests/**
+data/review_queue/**
+outputs/logs/**
+
+# Keep the directory layout without tracking contents
+!data/raw/.gitkeep
+!data/inventory/.gitkeep
+!data/manifests/.gitkeep
+!data/review_queue/.gitkeep
+!data/review_queue/candidates/
+!data/review_queue/candidates/.gitkeep
+!data/review_queue/loitering/
+!data/review_queue/loitering/.gitkeep
+!data/review_queue/random_background/
+!data/review_queue/random_background/.gitkeep
+!outputs/logs/.gitkeep
+!outputs/reports/
+!outputs/reports/.gitkeep
