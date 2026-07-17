@@ -118,6 +118,21 @@ outputs/logs/
 
 Video camera có thể chứa mặt người, biển số hoặc thông tin vận hành. Chỉ commit code, schema, cấu hình không nhạy cảm, tài liệu và test fixture đã được phép sử dụng.
 
+## Week 1 — Day 16 QA Artifacts
+
+Artifact nghiệp vụ do A (QA Lead / Test Design) tạo ngày 16/07/2026, đặt tại `docs/week-1/day-16/`:
+
+| Tài liệu | Nội dung |
+|---|---|
+| [Business_Clarification_Log_v0.1](docs/week-1/day-16/Business_Clarification_Log_v0.1.md) | 39 câu hỏi nghiệp vụ kèm status, owner trả lời, owner phê duyệt, deadline và impact |
+| [AI_Testing_Objectives_v0.1](docs/week-1/day-16/AI_Testing_Objectives_v0.1.md) | Mục tiêu kiểm thử, KPI dự kiến, phạm vi và ngoài phạm vi |
+| [Use_Case_Catalogue_v0.1](docs/week-1/day-16/Use_Case_Catalogue_v0.1.md) | Use case intrusion, camera cover/tamper, camera movement và E2E |
+| [Assumption_and_Blocker_Log_v0.1](docs/week-1/day-16/Assumption_and_Blocker_Log_v0.1.md) | 7 assumption và 9 blocker kèm fallback |
+| [Requirement_Traceability_Matrix_v0.1](docs/week-1/day-16/Requirement_Traceability_Matrix_v0.1.md) | Truy vết Requirement → Use case → Test category → Evidence → KPI |
+| [Kickoff_Meeting_Minutes_2026-07-16](docs/week-1/day-16/Kickoff_Meeting_Minutes_2026-07-16.md) | Biên bản kickoff, quyết định, blocker và action item |
+
+Tại thời điểm phát hành, **chưa có câu hỏi nghiệp vụ nào ở trạng thái `Answered`**. Mọi điểm chưa rõ được ghi là `Open`, `Assumption` hoặc `Blocked`; không suy diễn câu trả lời. KPI và acceptance criteria được khóa vào ngày 17/07/2026.
+
 ## Bước tiếp theo
 
 1. B: đặt một video thô vào `data/raw/` hoặc cung cấp đường dẫn local.
