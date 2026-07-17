@@ -19,17 +19,35 @@ data/manifests/**
 data/review_queue/**
 outputs/logs/**
 
+# Local model artifacts and framework caches
+models/cache/**
+models/weights/**
+.cache/torch/**
+
+# Local portable FFmpeg distribution; provisioned separately, never commit.
+tools/ffmpeg/**
+
 # Keep the directory layout without tracking contents
 !data/raw/.gitkeep
 !data/inventory/.gitkeep
 !data/manifests/.gitkeep
 !data/review_queue/.gitkeep
-!data/review_queue/candidates/
-!data/review_queue/candidates/.gitkeep
-!data/review_queue/loitering/
-!data/review_queue/loitering/.gitkeep
+!data/review_queue/person_detected/
+!data/review_queue/person_detected/.gitkeep
+!data/review_queue/camera_cover/
+!data/review_queue/camera_cover/.gitkeep
+!data/review_queue/camera_movement/
+!data/review_queue/camera_movement/.gitkeep
+!data/review_queue/anomaly_unknown/
+!data/review_queue/anomaly_unknown/.gitkeep
 !data/review_queue/random_background/
 !data/review_queue/random_background/.gitkeep
+!models/
+!models/README.md
+!models/cache/
+!models/cache/.gitkeep
+!models/weights/
+!models/weights/.gitkeep
 !outputs/logs/.gitkeep
 !outputs/reports/
 !outputs/reports/.gitkeep
