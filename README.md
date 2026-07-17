@@ -196,45 +196,85 @@ models/weights/
 ```
 Video camera có thể chứa mặt người, biển số hoặc thông tin vận hành. Chỉ commit code, schema, cấu hình không nhạy cảm, tài liệu và test fixture đã được phép sử dụng.
 
-## Week 1 — Day 16 QA Artifacts
+## Week 1 — Day 16 A / QA-Test Design Artifacts
 
-Artifact nghiệp vụ do A (QA Lead / Test Design) tạo ngày 16/07/2026, đặt tại `docs/week-1/day-16/`:
-
-| Tài liệu | Nội dung |
-|---|---|
-| [Business_Clarification_Log_v0.1](docs/week-1/day-16/Business_Clarification_Log_v0.1.md) | 39 câu hỏi nghiệp vụ kèm status, owner trả lời, owner phê duyệt, deadline và impact |
-| [AI_Testing_Objectives_v0.1](docs/week-1/day-16/AI_Testing_Objectives_v0.1.md) | Mục tiêu kiểm thử, KPI dự kiến, phạm vi và ngoài phạm vi |
-| [Use_Case_Catalogue_v0.1](docs/week-1/day-16/Use_Case_Catalogue_v0.1.md) | Use case intrusion, camera cover/tamper, camera movement và E2E |
-| [Assumption_and_Blocker_Log_v0.1](docs/week-1/day-16/Assumption_and_Blocker_Log_v0.1.md) | 7 assumption và 9 blocker kèm fallback |
-| [Requirement_Traceability_Matrix_v0.1](docs/week-1/day-16/Requirement_Traceability_Matrix_v0.1.md) | Truy vết Requirement → Use case → Test category → Evidence → KPI |
-| [Kickoff_Meeting_Minutes_2026-07-16](docs/week-1/day-16/Kickoff_Meeting_Minutes_2026-07-16.md) | Biên bản kickoff, quyết định, blocker và action item |
-
-Tại thời điểm phát hành, **chưa có câu hỏi nghiệp vụ nào ở trạng thái `Answered`**. Mọi điểm chưa rõ được ghi là `Open`, `Assumption` hoặc `Blocked`; không suy diễn câu trả lời. KPI và acceptance criteria được khóa vào ngày 17/07/2026.
-
-## Week 1 — Day 17 QA Artifacts
-
-Artifact chiến lược kiểm thử và KPI do A tạo ngày 17/07/2026, đặt tại `docs/week-1/day-17/`:
+Ngày 16 chỉ tạo tài liệu planning/specification; chưa có raw video/data thật, inventory, candidate result, annotation, ground truth, coverage hay KPI result. Các artifact của A đặt tại `docs/week-1/day-16/`:
 
 | Tài liệu | Nội dung |
 |---|---|
-| [Acceptance_Criteria_v1.0](docs/week-1/day-17/Acceptance_Criteria_v1.0.md) | Điều kiện đạt cho intrusion, cover, movement, data quality và E2E; điều kiện loại khỏi KPI |
-| [Alert_Severity_and_Event_Rule_Spec_v1.0](docs/week-1/day-17/Alert_Severity_and_Event_Rule_Spec_v1.0.md) | Cấp 1–4, event boundary, state transition, dedup/cooldown, uncertain case |
-| [Metric_and_KPI_Calculation_Rule_v1.0](docs/week-1/day-17/Metric_and_KPI_Calculation_Rule_v1.0.md) | Đơn vị tính theo event, matching rule, TP/FP/FN/TN, duplicate, misclassification, exclusion |
-| [Requirement_Traceability_Matrix_v1.0](docs/week-1/day-17/Requirement_Traceability_Matrix_v1.0.md) | 30 requirement truy vết Requirement → Use case → Test category → Evidence → KPI |
-| [Risk_and_Dependency_Log_v1.0](docs/week-1/day-17/Risk_and_Dependency_Log_v1.0.md) | 21 risk và 6 dependency kèm mitigation/fallback; đánh giá gate Tuần 1 |
-| [Coverage_Quota_v1.0.csv](docs/week-1/day-17/Coverage_Quota_v1.0.csv) | 38 slice quota theo camera, ngày/đêm, event, quality condition, positive/negative/hard negative |
+| [AI_Testing_Objectives_v0.1](docs/week-1/day-16/AI_Testing_Objectives_v0.1.md) | Mục tiêu, scope, ngoài phạm vi và KPI event-level target; phân biệt candidate evidence với evaluation cuối. |
+| [Use_Case_Catalogue_v0.1](docs/week-1/day-16/Use_Case_Catalogue_v0.1.md) | Scenario ROI Green/Yellow/Red, cover, movement, interference và data/E2E boundary. |
+| [Metric_and_KPI_Calculation_Rule_v0.1](docs/week-1/day-16/Metric_and_KPI_Calculation_Rule_v0.1.md) | TP/FP/FN/TN, matching, duplicate, misclassification, exclusion và `Chưa kết luận`. |
+| [Acceptance_Criteria_Draft_v0.1](docs/week-1/day-16/Acceptance_Criteria_Draft_v0.1.md) | Draft pass/fail theo category/evidence và dependency cần cho execution. |
 
-Lưu ý khi đọc:
+## Week 1 — Day 17 A / QA-Test Design Artifacts
 
-- **Các tài liệu đánh số `v1.0` theo tên artifact quy định trong kế hoạch nhưng chưa được khóa.** Chưa có câu hỏi nghiệp vụ nào từ ngày 16 được stakeholder trả lời, nên mọi điểm phụ thuộc severity, event boundary, cover/movement threshold, dedup và latency đều mang trạng thái `TBD_STAKEHOLDER_APPROVAL` hoặc `ASSUMPTION`.
-- KPI tính theo **event**, không theo frame. Ghi chú bắt buộc: `FP/(TP+FP)` **bằng `1 − Precision`**, không phải false-positive rate thống kê `FP/(FP+TN)`.
-- `Coverage_Quota_v1.0.csv` là **sampling hypothesis**: `target_count` và `camera_group=all` là giá trị khởi điểm, sẽ điều chỉnh sau khi có video inventory ở Tuần 2.
-- Gate Tuần 1 hiện **chưa đủ điều kiện mở** — xem mục 4 của Risk and Dependency Log.
+Ngày 17 hoàn thiện plan cho execution Tuần 2–3. `v1.0` là version artifact theo kế hoạch, không phải tuyên bố đã có data-result hoặc tài liệu đã được phê duyệt/khóa.
+
+| Tài liệu | Nội dung |
+|---|---|
+| [Acceptance_Criteria_v1.0](docs/week-1/day-17/Acceptance_Criteria_v1.0.md) | Acceptance theo intrusion, cover, movement, traceability và E2E; điều kiện loại/KPI conclusion. |
+| [Requirement_Traceability_Matrix_v1.0](docs/week-1/day-17/Requirement_Traceability_Matrix_v1.0.md) | Requirement → scenario → evidence → acceptance → KPI/output boundary. |
+| [Coverage_Quota_v1.0.csv](docs/week-1/day-17/Coverage_Quota_v1.0.csv) | Sampling hypothesis theo scenario/condition; `target_count` không phải sample có sẵn hay coverage đã đạt. |
+| [Risk_and_Dependency_Log_v1.0](docs/week-1/day-17/Risk_and_Dependency_Log_v1.0.md) | Dependency thực tế từ data/system access và limitation handling, không có deadline/approval giả. |
+| [Three_Week_Execution_Matrix_v1.0](docs/week-1/day-17/Three_Week_Execution_Matrix_v1.0.md) | Phân bổ A/B/C theo ba tuần, exit evidence và gate discipline. |
+
+## Week 1 — Day 16 B / Data & Automation Artifacts
+
+Các tài liệu ngày 16 mô tả code POC hiện có và design chuẩn bị nhận data; không có raw-data execution hay generated artifact thực tế.
+
+| Tài liệu | Nội dung |
+|---|---|
+| [Dataset_Folder_and_Manifest_Design_v0.1](docs/week-1/day-16/Dataset_Folder_and_Manifest_Design_v0.1.md) | Folder/manifest contract: JSON person hiện tại so với candidate manifest dự kiến. |
+| [Candidate_Mining_Pseudocode_v0.1](docs/week-1/day-16/Candidate_Mining_Pseudocode_v0.1.md) | Pseudocode POC person-only thực tế và target flow chưa implement. |
+| [Technical_Readiness_Checklist_v0.1](docs/week-1/day-16/Technical_Readiness_Checklist_v0.1.md) | Python/model/GPU/FFmpeg/raw access/storage readiness checklist. |
+| [Camera_Stream_and_ROI_Evidence_Checklist_v0.1](docs/week-1/day-16/Camera_Stream_and_ROI_Evidence_Checklist_v0.1.md) | Stream/camera/ROI/system evidence cần nhận từ Tuần 2. |
+| [KPI_Calculation_Sheet_Template_v0.1](docs/week-1/day-16/KPI_Calculation_Sheet_Template_v0.1.md) | Template event-level KPI; runtime hiện không tính KPI. |
+
+## Week 1 — Day 17 B / Data & Automation Artifacts
+
+Các tài liệu ngày 17 là architecture, runbook, policy và contract cho execution Tuần 2–3. Những workflow chưa được code hiện tại hỗ trợ được ghi rõ là planned/not implemented.
+
+| Tài liệu | Nội dung |
+|---|---|
+| [Data_Pipeline_Architecture_v1.0](docs/week-1/day-17/Data_Pipeline_Architecture_v1.0.md) | Tách current person-JSON POC lane khỏi target pipeline. |
+| [Data_Receipt_and_Inventory_Runbook_v1.0](docs/week-1/day-17/Data_Receipt_and_Inventory_Runbook_v1.0.md) | Intake/checksum/inventory procedure; inventory helpers chưa là CLI workflow. |
+| [Leakage_and_Source_Group_Policy_v1.0](docs/week-1/day-17/Leakage_and_Source_Group_Policy_v1.0.md) | Source-group/split policy và eligibility state. |
+| [Candidate_and_Evidence_Data_Contract_v1.0](docs/week-1/day-17/Candidate_and_Evidence_Data_Contract_v1.0.md) | Current `person-detections.v1` contract và candidate/review contract dự kiến. |
+| [Local_Artifact_and_Git_Policy_v1.0](docs/week-1/day-17/Local_Artifact_and_Git_Policy_v1.0.md) | Local sensitive-artifact, hashing, access và Git boundary policy. |
+
+## Week 1 — Day 16 C / Annotation & Data Quality Artifacts
+
+C sử dụng hướng **internal UI** nhưng UI này chưa được implement trong repository. Review unit là logical source span và final event interval luôn là thời gian tính từ đầu raw source. Annotation được thiết kế là extension của cùng JSON `person-detections.v1` theo source; không tạo standalone annotation format/file.
+
+| Tài liệu | Nội dung |
+|---|---|
+| [Label_Taxonomy_v0.1](docs/week-1/day-16/Label_Taxonomy_v0.1.md) | Nhãn review, interference, review status và ranh giới severity. |
+| [Metadata_Schema_v0.1](docs/week-1/day-16/Metadata_Schema_v0.1.md) | Current JSON fields và annotation extension proposal chưa được code hỗ trợ. |
+| [Labeling_Guideline_v0.1](docs/week-1/day-16/Labeling_Guideline_v0.1.md) | Quy trình source-relative review trên future internal UI. |
+| [Annotation_Queue_Entry_Template_v0.1](docs/week-1/day-16/Annotation_Queue_Entry_Template_v0.1.md) | Template queue entry theo source/SHA/span/context/final event. |
+| [Disagreement_and_Adjudication_Process_v0.1](docs/week-1/day-16/Disagreement_and_Adjudication_Process_v0.1.md) | Second review, adjudication, escalation và unresolved exclusion. |
+
+## Week 1 — Day 17 C / Annotation & Data Quality Artifacts
+
+Các tài liệu này chuẩn bị QC/release workflow từ Tuần 2–3; không tuyên bố có annotation, calibration, agreement hoặc ground truth result. Agreement threshold chưa được quyết định và được ghi là `TBD_STAKEHOLDER_APPROVAL`.
+
+| Tài liệu | Nội dung |
+|---|---|
+| [Labeling_Guideline_v0.2](docs/week-1/day-17/Labeling_Guideline_v0.2.md) | Guideline operational: internal UI planned, source-relative event interval và output extension. |
+| [Annotation_QC_Protocol_v1.0](docs/week-1/day-17/Annotation_QC_Protocol_v1.0.md) | Schema/source/span/label/reviewer/ROI/release validation. |
+| [Calibration_Plan_v1.0](docs/week-1/day-17/Calibration_Plan_v1.0.md) | Kế hoạch calibration future, không có calibration result. |
+| [Annotation_Agreement_Plan_v1.0](docs/week-1/day-17/Annotation_Agreement_Plan_v1.0.md) | Double-review, Kappa/boundary measurement và threshold TBD. |
+| [Ground_Truth_Release_Criteria_v1.0](docs/week-1/day-17/Ground_Truth_Release_Criteria_v1.0.md) | Điều kiện ground truth/golden/diagnostic/exclusion release. |
+
+Fact mentor được phản ánh trong các artifact: ROI Green/Yellow/Red; cover positive khi ≥30% trong ≥120 giây; movement positive là strong shake hoặc rotation/changed orientation; rain, vehicle glare và scene motion không do camera là interference; severity do rule engine quyết định. Reviewer không gán Cấp 1–4.
+
+KPI tính theo **event**, không theo frame. `FP/(TP+FP)` bằng `1 − Precision`, không phải false-positive rate thống kê `FP/(FP+TN)`. Coverage, ground truth và KPI chỉ được kết luận sau khi có data/evidence thực tế từ Tuần 2–3.
 
 ## Bước tiếp theo
 
-1. B: chạy `candidate-mining run` cho raw video local và review logical span qua `candidate-mining browse`.
-2. C: hoàn thiện annotation UI để chọn final event interval trong logical source span; JSON detection không phải ground truth.
-3. A: review coverage, artifact và checklist bàn giao.
+1. Tuần 2 khi nhận raw data: B chạy `candidate-mining run` và review technical person span qua `candidate-mining browse` theo capability thực tế.
+2. C xây dựng future internal UI để đọc/extend JSON theo source, review source-relative span và ghi final event interval; JSON detection không phải ground truth.
+3. A áp dụng coverage hypothesis, acceptance, traceability và risk/dependency plan; KPI chỉ kết luận khi đủ evidence và matching rule.
 
 Các tài liệu Week 1 ở trên là artifact QA/kế hoạch độc lập. Chúng không thay đổi scope kỹ thuật của POC person-detection hiện tại.

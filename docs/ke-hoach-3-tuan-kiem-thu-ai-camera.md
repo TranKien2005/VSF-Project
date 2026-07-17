@@ -18,7 +18,7 @@
 
 ### 1.1. Nguyên tắc về ROI
 
-Việc **vẽ, tạo hoặc thay đổi ROI không nằm trong phạm vi** kế hoạch này. Khi kiểm thử và gán nhãn, nhóm chỉ cần lưu bằng chứng cấu hình đang áp dụng:
+Việc **vẽ, tạo hoặc thay đổi ROI không nằm trong phạm vi** kế hoạch này. Trong Tuần 1, nhóm chỉ thiết kế schema/checklist để nhận và lưu evidence ROI; chưa xác nhận snapshot/version thực tế vì chưa có data/source thật. Từ Tuần 2, khi có video/source, mỗi case phụ thuộc ROI cần lưu bằng chứng cấu hình đang áp dụng:
 
 - `camera_id`;
 - `roi_config_id` hoặc `roi_version`;
@@ -113,38 +113,48 @@ Tỷ lệ báo động giả = FP / (TP + FP)
 
 ### 4.1. Trèo rào/xâm nhập
 
-| Nhãn sự kiện | Diễn giải | ROI/cấp độ mong đợi |
-|---|---|---|
-| `person_near_fence` | Đối tượng lảng vảng ở vùng ngoài hàng rào | ROI Xanh; Cấp 4 theo dõi, tối đa 5 phút theo rule nghiệp vụ |
-| `person_approaching_fence` | Đối tượng tiếp cận sát hàng rào | ROI Vàng; Cấp 2 hoặc 3 — cần chốt rule phân biệt |
-| `person_touching_fence` | Đối tượng chạm/bám hàng rào | ROI Vàng/Đỏ tùy ROI thực tế |
-| `person_climbing_fence` | Đối tượng có hành vi trèo rào | Cấp độ cần chốt theo event boundary |
-| `person_on_fence_top` | Đối tượng ở đỉnh hàng rào | Thông thường ứng viên Cấp 1; cần chốt |
-| `person_crossing_fence` | Đối tượng vượt qua hàng rào | ROI Đỏ; Cấp 1 khẩn cấp |
-| `person_inside_restricted_area` | Đối tượng ở trong khu cấm | ROI Đỏ; Cấp 1 khẩn cấp |
-| `person_outside_roi` | Có người nhưng ngoài vùng cảnh báo | Negative/hard negative |
+| Nhãn sự kiện | Diễn giải | ROI/category evidence | Severity |
+|---|---|---|---|
+| `person_near_fence` | Đối tượng lảng vảng ở vùng ngoài hàng rào | ROI Xanh khi evidence ROI xác nhận. | Chỉ ghi output rule engine nếu hệ thống cung cấp; không tự gán Cấp 4. |
+| `person_approaching_fence` | Đối tượng tiếp cận sát hàng rào | ROI Vàng khi evidence ROI xác nhận. | Không dùng reviewer để phân biệt Cấp 2/Cấp 3. |
+| `person_touching_fence` | Đối tượng chạm/bám hàng rào | ROI Vàng/Đỏ theo ROI thực tế. | Chỉ ghi output rule engine nếu có. |
+| `person_climbing_fence` | Đối tượng có hành vi trèo rào | ROI liên quan theo evidence video/reference. | Chỉ ghi output rule engine nếu có. |
+| `person_on_fence_top` | Đối tượng ở đỉnh hàng rào | ROI liên quan theo evidence video/reference. | Chỉ ghi output rule engine nếu có. |
+| `person_crossing_fence` | Đối tượng vượt qua hàng rào | ROI Đỏ khi evidence ROI xác nhận. | Rule engine quyết định Cấp 1 nếu rule hệ thống áp dụng. |
+| `person_inside_restricted_area` | Đối tượng ở trong khu vực cấm | ROI Đỏ khi evidence ROI xác nhận. | Rule engine quyết định severity. |
+| `person_outside_roi` | Có người nhưng ngoài vùng cảnh báo | Negative/hard negative. | Không áp dụng. |
+
+> Lảng vảng tối đa 5 phút/ROI Xanh và các cấp cảnh báo là reference cho rule engine. Candidate mining và reviewer không tạo label `loitering`, không dùng ngưỡng 5 phút để chia candidate, và không tự gán severity.
 
 ### 4.2. Che camera/tamper và nhiễu liên quan
 
-| Nhãn | Vai trò dự kiến |
+| Nhãn | Vai trò / rule |
 |---|---|
-| `lens_full_cover` | Positive: che gần/toàn bộ lens |
-| `lens_partial_cover` | Positive/edge: che một phần, cần ngưỡng che và thời lượng |
-| `temporary_occlusion` | Edge/negative tùy rule: vật thể che tạm thời |
-| `rain_heavy`, `water_drop_or_fog` | Environmental hard negative hoặc camera-health riêng |
-| `headlight_glare` | Hard negative: ánh đèn xe quét qua |
-| `low_light` | Quality condition/hard negative |
-| `black_screen`, `video_freeze`, `video_loss` | Camera health riêng hay tamper: cần chốt |
+| `lens_full_cover` | Positive khi evidence che đáp ứng ≥30% khung hình và kéo dài ≥120 giây. |
+| `lens_partial_cover` | Positive nếu tổng evidence vẫn đáp ứng ≥30% và ≥120 giây; nếu dưới một trong hai ngưỡng thì boundary/negative. |
+| `cover_below_area_threshold` | Boundary/negative: che dưới 30%. |
+| `cover_below_duration_threshold` | Boundary/negative: che ≥30% nhưng dưới 120 giây. |
+| `temporary_occlusion` | Edge/negative: vật che tạm thời, không đáp ứng đủ 30%/120 giây. |
+| `rain_heavy`, `water_drop_or_fog` | Environmental hard negative hoặc camera-health riêng nếu system rule chưa xác định. |
+| `headlight_glare` | Hard negative: ánh đèn xe quét qua. |
+| `low_light` | Quality condition/hard negative. |
+| `black_screen`, `video_freeze`, `video_loss` | Camera health riêng hay tamper: ghi riêng, không tự gộp vào cover nếu chưa có rule hệ thống. |
+
+> Severity cover do rule engine quyết định. Mentor cung cấp reference Cấp 1; reviewer chỉ ghi severity output thực tế của hệ thống nếu có.
 
 ### 4.3. Rung lắc/xoay camera
 
 | Nhãn | Diễn giải |
 |---|---|
-| `temporary_shake` | Rung ngắn rồi trở lại bình thường |
-| `environmental_vibration` | Rung do gió, xe, cổng hoặc điều kiện ngoài ý muốn |
-| `sustained_camera_displacement` | Camera lệch/xoay hướng duy trì; positive chính |
-| `roi_drift` | Góc camera lệch làm ROI không còn bám đúng vùng vật lý |
-| `scene_change_non_camera_move` | Cảnh thay đổi nhưng camera không bị dịch chuyển; hard negative |
+| `camera_strong_shake` | Positive: camera rung mạnh theo evidence video. Không tự đặt ngưỡng pixel/độ/thời lượng. |
+| `camera_rotation` | Positive: camera bị xoay/lệch hướng theo evidence video. |
+| `temporary_shake` | Edge/negative: rung ngắn rồi trở lại bình thường khi evidence chưa đủ để coi là rung mạnh. |
+| `environmental_vibration` | Hard negative/edge: rung do gió, xe, cổng hoặc điều kiện ngoài ý muốn. |
+| `sustained_camera_displacement` | Mô tả kỹ thuật có thể dùng cho evidence xoay/lệch hướng; không tự tạo threshold mới. |
+| `roi_drift` | Ghi nhận evidence nếu ROI không còn bám vùng vật lý; không tự biến thành category alert riêng nếu system rule chưa xác định. |
+| `scene_change_non_camera_move` | Cảnh thay đổi nhưng camera không bị dịch chuyển; hard negative. |
+
+> Severity movement do rule engine quyết định. Mentor cung cấp reference Cấp 1 cho rung mạnh/xoay; reviewer chỉ ghi output system nếu có.
 
 ### 4.4. Trạng thái annotation chung
 
@@ -190,148 +200,161 @@ invalid
 
 ---
 
-## 6. Câu hỏi phải chốt trong Tuần 1
+## 6. Fact đã có và điểm cần chuẩn bị trong Tuần 1
 
-Đúng: **câu hỏi cần hỏi mentor/stakeholder chủ yếu phải được đưa vào Tuần 1**. Nếu chờ tới Tuần 2 hoặc 3, nhóm có thể làm sai dataset, nhãn hoặc cách tính KPI. Các câu hỏi dưới đây được chia cho từng người để có owner rõ ràng.
+Tuần 1 chỉ thiết kế rule/spec/template, chưa có raw data để xác minh case thật. Các fact mentor đã trả lời không tiếp tục được ghi như câu hỏi/blocker; điểm chưa có thông tin được ghi rõ để áp dụng từ Tuần 2, không gán owner/approval/deadline giả.
 
-| Phần cần chốt | Câu hỏi | Owner hỏi/ghi nhận | Phê duyệt | Hạn chốt | Tác động nếu chưa rõ |
-|---|---|---|---|---|---|
-| Object scope | Chỉ phát hiện người, hay gồm xe/động vật/nhân viên? Có whitelist không? | A | Stakeholder/AI Lead | Ngày 16 | Không phân loại được TP/FP đúng |
-| ROI evidence | Tool cung cấp `roi_config_id`, phiên bản, snapshot và thời điểm hiệu lực thế nào? | B | Product/Technical Owner | Ngày 16 | Không truy vết được cảnh báo theo ROI; **không hỏi tạo ROI mới** |
-| Cấp 2 và Cấp 3 | ROI Vàng phân biệt Cấp 2/Cấp 3 dựa trên thời lượng, vị trí hay hành vi nào? | A | Stakeholder | Ngày 16 | Không gán severity nhất quán |
-| Event boundary | Khi nào event bắt đầu/kết thúc? Người chỉ đưa tay vào ROI đỏ hoặc trèo rồi quay xuống có tính Cấp 1 không? | A + C | Stakeholder | Ngày 16 | FN/TP và nhãn boundary sai |
-| Chuyển cấp/dedup | Xanh → Vàng → Đỏ là một incident cập nhật hay nhiều alert? Cooldown là bao lâu? | A | Product/Operations Owner | Ngày 17 | Không tính được duplicate alert/KPI event |
-| Cover/tamper | Che bao nhiêu % và bao lâu là alert? Mưa lớn/chói đèn/mất hình/freeze được tính tamper hay camera health? | A + C | Stakeholder/AI Lead | Ngày 16 | Positive/negative bị lẫn |
-| Camera movement | Rung/xoay lệch bao nhiêu pixel/độ/thời lượng là positive? Rung rồi trở lại có báo không? | B + C | AI Lead/Technical Owner | Ngày 16 | Không dựng được test boundary |
-| KPI denominator | TP/FP/FN tính theo event như thế nào? Alert sai loại tính FP+FN hay misclassification? Tên M2 có giữ là “tỷ lệ báo động giả” không? | A + B | Stakeholder/QA Lead | Ngày 17 | Không thể kết luận KPI nhất quán |
-| Latency/SLA | Cửa sổ phát hiện cho Cấp 1/cover/movement và mốc tính latency là gì? | A + B | Product/Operations Owner | Ngày 17 | Không đánh giá E2E được |
-| Data/train leakage | AI team có train manifest, checksum, source list hoặc danh sách camera/ngày train không? | B | AI Team | Ngày 16 | Chỉ ghi nhận test eligibility `Unknown`, không chứng nhận độc lập |
-| Ground truth | Ai quan sát hiện trường, nguồn nào là chuẩn; ai adjudicate case bất đồng? | C | Stakeholder | Ngày 17 | Không khóa được nhãn cuối |
-| PII/storage | Chính sách lưu video/mặt/biển số, quyền truy cập và thời hạn lưu là gì? | B + C | Security/Data Owner | Ngày 17 | Rủi ro tuân thủ và bàn giao |
+| Nội dung | Fact / trạng thái hiện có | Việc chuẩn bị trong Tuần 1 | Ảnh hưởng khi execution |
+|---|---|---|---|
+| Object scope | Bài toán VHR hiện tập trung vào person. Whitelist/nhân viên/xe/động vật chưa có rule cụ thể. | Ghi person là scope hiện có; thiết kế trạng thái negative/unknown cho case ngoài scope. | Không suy diễn policy authorization; chỉ report limitation nếu gặp case thực tế. |
+| ROI evidence | Có ROI Xanh/Vàng/Đỏ; cách lấy `roi_config_id`, version/snapshot/effective time cần xác nhận khi có system/data access. | Thiết kế schema/checklist ROI evidence. | Case ROI thiếu reference phải ghi limitation, không tạo/sửa ROI. |
+| Cấp 2/Cấp 3 | Severity do rule engine quyết định; phân loại video không cần tách Cấp 2/Cấp 3. | Tách `review_category`/`roi_zone` khỏi `rule_engine_severity_output` trong schema. | Chỉ verify severity khi có system output/rule reference. |
+| Event boundary | Chưa có video thật để kiểm chứng boundary case. | Thiết kế guideline start/end, ambiguous/invalid và test-case template. | Hiệu chỉnh guideline từ review data Tuần 2; unresolved case không vào KPI. |
+| Chuyển ROI/dedup | Chưa có incident/cooldown rule cụ thể. | Thiết kế field event/alert matching, duplicate và misclassification trong KPI template. | Nếu thiếu rule/matching window thì KPI phần liên quan là Chưa kết luận. |
+| Cover/tamper | **Đã trả lời:** cover positive khi ≥30% và ≥120 giây. Rain/glare là interference; freeze/black screen/video loss chưa có rule rõ. | Đưa 30%/120s vào taxonomy, acceptance, boundary cases và annotation schema. | Không tự gộp camera-health vào cover. |
+| Camera movement | **Đã trả lời:** strong shake hoặc rotation/lệch hướng. Chưa có pixel/degree/duration threshold. | Thiết kế positive/negative/uncertain labels và evidence fields. | Chỉ dùng obvious strong-shake/rotation cho positive; case nhẹ/không rõ là edge/uncertain. |
+| KPI | Kế hoạch dùng event-level; M2 = `FP/(TP+FP)`. | Hoàn thiện metric/matching template, exclusion và report conditions. | Không có evidence/matching rule đủ thì không công bố KPI chính thức. |
+| Latency/SLA | Chưa có detection window/latency origin từ hệ thống. | Để field observed timestamp trong schema, không đặt target giả. | Không tính latency chính thức nếu không có rule/time origin. |
+| Data/train leakage | Chưa có train manifest/source list. | Thiết kế eligibility field: Test eligible/Train overlap/Suspected overlap/Unknown. | Mặc định `Unknown`, không claim test độc lập. |
+| Ground truth/review | Chưa có data thật để annotation/calibration. | Thiết kế labeling guideline, second-review, disagreement và release criteria. | Chỉ lock ground truth sau review evidence thực tế. |
+| PII/storage | Raw video/artifact nhạy cảm phải local-only/Git-ignore; retention/access chi tiết chưa có. | Thiết kế local storage/Git policy. | Không commit raw, JSON, export, model/cache/log; ghi limitation nếu policy chi tiết chưa có. |
 
 ---
 
 ## 7. Kế hoạch chi tiết theo tuần và từng người
 
-## Tuần 1 — Nắm bài toán, chốt rule và lập kế hoạch
+## Tuần 1 — Nắm bài toán, thiết kế plan và base pipeline
 
-> **Mục tiêu tuần:** khóa đủ requirement để không tạo dataset sai; có scope v1, KPI rule, guideline nháp, data-access plan và owner phê duyệt.
+> **Ràng buộc đầu vào:** Tuần 1 (ngày 16–17) **chưa có raw video/data thật**. Vì vậy toàn bộ output của tuần này là plan, specification, schema, template và base pipeline; không có inventory, candidate, review clip, annotation, ground truth, coverage result, leakage result hay KPI result thực tế.
+>
+> **Mục tiêu tuần:** chuyển requirement mentor thành scope/use case/metric/acceptance rõ ràng; thiết kế pipeline và contract để nhận data từ Tuần 2; lập schedule chi tiết theo vai trò cho phần việc còn lại.
 
-### Ngày 16 — Kickoff, làm rõ nghiệp vụ và khảo sát readiness
+### Phân biệt output Tuần 1 và artifact có data
+
+| Loại output | Tuần 1 | Từ Tuần 2 khi có raw data |
+|---|---|---|
+| Tài liệu | Plan, rule spec, use-case catalogue, schema, template, guideline draft, pipeline design | Report dựa trên dữ liệu thực tế, release note, coverage/KPI/ground-truth document |
+| Data artifact | Chỉ folder structure/template rỗng nếu cần | Inventory, checksum, candidate JSON/manifest, queue, annotation, ground truth, validation và KPI input/result |
+| Candidate mining | Chuẩn bị môi trường/base pipeline, định nghĩa input/output, kiểm thử unit/synthetic fixture nếu có | Chạy trên raw source thực tế để tạo technical evidence |
+| Review/annotation | Thiết kế guideline, queue schema và QC protocol | Review video thật, annotation, agreement, disagreement và ground truth |
+
+### Ngày 16 — Xác định scope, use case và thiết kế contract
+
+> Không tổ chức hoặc ghi nhận kickoff/meeting giả. Hoạt động ngày 16 là đọc requirement mentor, thiết kế tài liệu và chuẩn bị base pipeline không cần raw data.
 
 #### A — QA Lead / Test Design
 
-1. Chủ trì kickoff với AI team, stakeholder và vận hành.
-2. Trình bày ba phạm vi bắt buộc: intrusion, camera cover/tamper, camera movement.
-3. Hỏi và ghi nhận toàn bộ câu hỏi nghiệp vụ thuộc các dòng Object scope, Cấp 2/3, Event boundary, Dedup, Cover/tamper, KPI và SLA trong [Mục 6](#6-câu-hỏi-phải-chốt-trong-tuần-1).
-4. Lập `Business_Clarification_Log_v0.1`, mỗi câu có trạng thái `Open/Answered/Assumption/Blocked`.
-5. Tạo traceability ban đầu: Requirement → Use case → Test category → Evidence → KPI.
+1. Chuyển thông tin mentor thành mục tiêu test, phạm vi và ngoài phạm vi.
+2. Soạn use case cho intrusion theo ROI Xanh/Vàng/Đỏ, cover ≥30%/≥120 giây, strong shake/rotation và negative/interference.
+3. Thiết kế KPI event-level: TP/FP/FN/TN, Precision, Recall, `FP/(TP+FP)`, duplicate, misclassification và điều kiện `Chưa kết luận`.
+4. Thiết kế pass/fail/acceptance theo category/evidence; severity là output rule engine, không phải nhãn do reviewer chọn.
 
-**Đầu ra:**
+**Đầu ra tài liệu:**
 
-- `Business_Clarification_Log_v0.1`
 - `AI_Testing_Objectives_v0.1`
 - `Use_Case_Catalogue_v0.1`
-- danh sách assumption và blocker.
+- `Metric_and_KPI_Calculation_Rule_v0.1`
+- `Acceptance_Criteria_Draft_v0.1`
 
 #### B — Data & Automation
 
-1. Xác minh quyền truy cập raw video, camera/log/API, storage và danh sách nguồn data.
-2. Thu thập stream profile thực tế: resolution, FPS, codec, bitrate, timestamp, NTP/timezone, source ID.
-3. Xác nhận cách lấy `roi_config_id`, `roi_version`, snapshot ROI; **không cấu hình hoặc thay đổi ROI**.
-4. Lập checklist công cụ: Python, FFmpeg/ffprobe, OpenCV, detector nhỏ nếu được chấp thuận, Label Studio/CVAT, Git, DVC/manifest.
-5. Hỏi AI team về train-data manifest và các giới hạn môi trường chạy.
+1. Thiết kế cấu trúc data folder local, manifest, source identity, checksum, source-relative timestamp và data lifecycle.
+2. Thiết kế base candidate-mining pipeline; ghi rõ output hiện tại chỉ là person technical evidence, không phải intrusion/ROI/cover/movement/severity label.
+3. Soạn checklist sẽ dùng từ Tuần 2 để inventory source, nhận ROI evidence và kiểm tra quyền truy cập video/log/API nếu được cung cấp.
+4. Chuẩn bị environment/tooling và test code bằng unit test hoặc fixture không nhạy cảm; không chạy trên raw camera video vì chưa có data.
 
-**Đầu ra:**
+**Đầu ra tài liệu:**
 
+- `Dataset_Folder_and_Manifest_Design_v0.1`
+- `Candidate_Mining_Pseudocode_v0.1`
 - `Technical_Readiness_Checklist_v0.1`
 - `Camera_Stream_and_ROI_Evidence_Checklist_v0.1`
-- `Data_Pipeline_Architecture_v0.1`
-- `Dependency_and_Access_Log_v0.1`.
+- `KPI_Calculation_Sheet_Template_v0.1`
 
 #### C — Annotation & Data Quality
 
-1. Tạo taxonomy nhãn v0.1 theo [Mục 4](#4-định-nghĩa-kịch-bản-và-taxonomy-nhãn).
-2. Soạn metadata schema nháp và trạng thái review.
-3. Chuẩn bị câu hỏi về event start/end, case ambiguous, ground truth source, adjudicator, PII.
-4. Khảo sát Label Studio/CVAT/công cụ nội bộ theo tiêu chí: hỗ trợ video, time segment, reviewer thứ hai, export metadata.
+1. Soạn taxonomy nhãn và metadata schema từ requirement mentor.
+2. Soạn guideline draft: category, source-relative event boundary, ROI evidence, cover percentage/duration, movement evidence, ambiguous/invalid.
+3. Thiết kế queue entry template, blind/second review, agreement, disagreement và adjudication process.
+4. Không tạo annotation/calibration result vì chưa có sample thật.
 
-**Đầu ra:**
+**Đầu ra tài liệu:**
 
 - `Label_Taxonomy_v0.1`
 - `Metadata_Schema_v0.1`
-- `Annotation_Tool_Proposal`
-- `Labeling_Guideline_v0.1`.
+- `Labeling_Guideline_v0.1`
+- `Annotation_Queue_Entry_Template_v0.1`
+- `Disagreement_and_Adjudication_Process_v0.1`
 
-### Ngày 17 — Khóa strategy, metric và lịch triển khai
+### Ngày 17 — Hoàn thiện plan tuần 2–3 và chuẩn bị nhận data
 
-#### Công việc chung buổi sáng
+#### Công việc chung
 
-1. Review câu trả lời từ mentor/stakeholder; đánh dấu các điểm chỉ là assumption.
-2. Chốt phạm vi MVP và các hạng mục out-of-scope.
-3. Khóa quy tắc event-level KPI, mapping alert, duplicate và uncertain/invalid.
-4. Chốt owner phê duyệt pass/fail; chốt DoD của từng tuần.
-5. Nếu có blocker chưa giải quyết, ghi rõ impact và phương án fallback, không tự diễn giải requirement.
+1. Review chéo các plan/spec/template tạo ngày 16 để loại mâu thuẫn.
+2. Ghi các requirement đã có mentor answer là fact; không tiếp tục đưa thành câu hỏi/blocker.
+3. Các điểm chưa có dữ liệu đầu vào hoặc rule-system output chỉ được ghi limitation/dependency của execution, không tự suy diễn.
+4. Lập detailed schedule cho Tuần 2 (raw → coarse auto → fine human → cleaning) và Tuần 3 (annotation → ground truth → QC → storage → handover).
 
 #### A — QA Lead / Test Design
 
-1. Hoàn thiện use case, test taxonomy, risk priority và acceptance criteria theo KPI đã chốt.
-2. Tạo `Alert_Severity_and_Event_Rule_Spec_v1.0`: Cấp 1–4, state transition, cooldown/dedup, event boundary.
-3. Xây dựng quota coverage theo camera, ngày/đêm, quality condition, event type, negative/adversarial.
-4. Chốt RACI, weekly schedule và requirement traceability matrix.
+1. Hoàn thiện acceptance draft, coverage hypothesis, requirement traceability và risk/limitation plan.
+2. Chuyển cover threshold 30%/120s vào acceptance/use case; tách ROI category khỏi severity verification.
+3. Xác định coverage slices sẽ đánh giá khi data đến: camera, ngày/đêm, ROI, scenario, condition, positive/negative/edge.
 
-**Đầu ra:**
+**Đầu ra tài liệu:**
 
 - `Acceptance_Criteria_v1.0`
-- `Alert_Severity_and_Event_Rule_Spec_v1.0`
-- `Metric_and_KPI_Calculation_Rule_v1.0`
 - `Requirement_Traceability_Matrix_v1.0`
-- `Risk_and_Dependency_Log_v1.0`.
+- `Coverage_Quota_v1.0`
+- `Risk_and_Dependency_Log_v1.0`
+- `Three_Week_Execution_Matrix_v1.0`
 
 #### B — Data & Automation
 
-1. Hoàn thiện thiết kế folder, manifest và pipeline candidate mining.
-2. Xác định quy tắc kiểm tra file hỏng, checksum, duplicate, time drift và source-group split.
-3. Thiết kế bảng KPI input gồm event ID, alert ID, outcome TP/FP/FN/TN, reviewer, evidence link.
-4. Chạy dry run tối thiểu một case mỗi nhóm: intrusion, cover, movement; xác minh thu được video, timestamp, ROI version, alert/log.
+1. Hoàn thiện pipeline/manifest design và validation rules cho inventory, source group, duplicate/leakage, candidate queue và KPI input.
+2. Xác định rõ artifact nào là planned document, artifact nào chỉ được sinh local từ raw data ở Tuần 2 trở đi.
+3. Chuẩn bị command/runbook nhận dữ liệu, nhưng không ghi dry-run evidence report hoặc inventory result khi chưa có data.
 
-**Đầu ra:**
+**Đầu ra tài liệu:**
 
-- `Dataset_Folder_and_Manifest_Design_v1.0`
-- `Candidate_Mining_Pseudocode_v1.0`
-- `KPI_Calculation_Sheet_Template`
-- `Dry_Run_Evidence_Report`.
+- `Data_Pipeline_Architecture_v1.0`
+- `Data_Receipt_and_Inventory_Runbook_v1.0`
+- `Leakage_and_Source_Group_Policy_v1.0`
+- `Candidate_and_Evidence_Data_Contract_v1.0`
+- `Local_Artifact_and_Git_Policy_v1.0`
 
 #### C — Annotation & Data Quality
 
-1. Hoàn thiện guideline v0.2 từ câu trả lời đã chốt.
-2. Xác định quy trình blind review, second review và adjudication.
-3. Chuẩn bị tập calibration 30–50 clip hoặc số lượng phù hợp nguồn data.
-4. Chốt rule nhãn cho partial cover, mưa/chói, shake vs displacement, person outside ROI và multiple events.
+1. Hoàn thiện guideline draft, annotation schema, calibration plan và agreement protocol.
+2. Xác định sample selection/second-review criteria để áp dụng khi queue có dữ liệu thật.
+3. Không viết calibration result, disagreement log hoặc ground truth release vì các artifact đó cần video và annotation thật.
 
-**Đầu ra:**
+**Đầu ra tài liệu:**
 
 - `Labeling_Guideline_v0.2`
-- `Calibration_Plan`
-- `Disagreement_and_Adjudication_Process`
-- `Annotation_Queue_Entry_Template`.
+- `Annotation_QC_Protocol_v1.0`
+- `Calibration_Plan_v1.0`
+- `Annotation_Agreement_Plan_v1.0`
+- `Ground_Truth_Release_Criteria_v1.0`
 
 ### Gate kết thúc Tuần 1
 
-Chỉ chuyển Tuần 2 khi:
+Chỉ chuyển sang execution trên raw data ở Tuần 2 khi:
 
-- [ ] Có owner phê duyệt scope/pass-fail hoặc assumption đã được chấp nhận.
-- [ ] Cấp 2/Cấp 3, Cấp 1 boundary, cover/tamper và movement boundary có định nghĩa đủ để gán nhãn.
-- [ ] KPI được chốt theo event và cách đếm TP/FP/FN rõ ràng.
-- [ ] Biết data source, quyền truy cập, metadata tối thiểu và cách tham chiếu ROI version.
-- [ ] Chọn được tool/phương án review.
-- [ ] Dry run tạo được evidence đầy đủ cho ít nhất một case mỗi nhóm.
+- [ ] Có plan/scope/use case/acceptance/KPI rule/spec và template cần thiết.
+- [ ] Cover ≥30%/≥120s đã được đưa vào taxonomy/acceptance.
+- [ ] Đã tách ROI category, review label và rule-engine severity output.
+- [ ] Có folder/manifest/schema/runbook thiết kế để nhận data.
+- [ ] Base pipeline/environment sẵn sàng theo checklist.
+- [ ] Không có artifact nào giả định đã quét/review/chạy trên raw video thật.
 
 ---
 
 ## Tuần 2 — Raw video đến candidate annotation queue
 
-> **Mục tiêu tuần:** inventory dữ liệu, bảo vệ khỏi leakage, tạo candidate clip có thể truy vết, sampling có kiểm soát và hàng đợi review. **Chưa tuyên bố đây là ground truth cuối.**
+> **Mục tiêu tuần:** từ raw data thực nhận, thực hiện inventory/eligibility, phân loại thô bằng automation, phân loại tinh bởi người review, sau đó làm sạch và chuẩn bị annotation queue. **Chưa tuyên bố đây là ground truth cuối.**
+>
+> Output có raw video/annotation/manifest/report là local artifact Git-ignore. Các tên document trong kế hoạch mô tả report/spec cần tạo sau execution; không được xem là đã tồn tại trước khi nhận data.
 
 ### Ngày 1 — Nhận và kiểm kê dữ liệu
 
@@ -351,71 +374,91 @@ Chỉ chuyển Tuần 2 khi:
 
 > Nếu AI team chưa cung cấp train manifest: trạng thái phải là `Unknown`; không được tuyên bố test set độc lập với train data.
 
-### Ngày 3 — Xây candidate mining pipeline
+### Ngày 3 — Phân loại thô bằng automation và tạo candidate evidence
 
-#### B — Owner chính
+#### B — Data & Automation
 
-Luồng v1:
+Chạy pipeline trên raw data theo capability thực tế, lưu source-relative timestamp và technical evidence để hỗ trợ review.
+
+**Capability hiện tại của POC:** RT-DETR person detection tạo một JSON local theo raw source trong `person_detected`; viewer đọc raw source và JSON. POC không tự kết luận intrusion/ROI/cover/movement/severity và không tự tạo inventory, CSV manifest, proxy clip hoặc review video hàng loạt.
+
+Target workflow khi các module tương ứng đã được triển khai/được phép chạy:
 
 ```text
 Raw video
-  ↓ frame sampling
-Motion signal + person candidate + brightness/blur/edge signal + scene-change signal
-  ↓ candidate timestamp
-Event merge
-  ↓ candidate_events.csv
-Proxy clip exporter
+  ↓ inventory + frame sampling
+Technical candidate signals
+  ↓ source-relative candidate windows
+Event merge / context policy
+  ↓ local candidate evidence and queue records
+Human review
 ```
 
-Các module tối thiểu:
+Các luồng coarse classification cần được thiết kế và ghi rõ status capability:
 
-1. motion candidate;
-2. person candidate;
-3. visual obstruction candidate;
-4. global camera-change candidate;
-5. event merger;
-6. proxy clip exporter.
+1. happy path/normal candidates;
+2. edge candidates: ROI boundary, cover area/duration boundary, uncertain movement;
+3. negative/interference: rain, glare, person outside relevant ROI, non-camera scene motion;
+4. random background samples để kiểm tra mining bias/bỏ sót;
+5. risk-based samples: đêm, mưa, glare, rung, partial cover và edge case.
 
-**Đầu ra B:** `candidate_mining_pipeline_v0.1`, `candidate_events_v0.1.csv`, `proxy_clips_batch_01`.
+**Đầu ra tài liệu:**
 
-#### A
+- `Candidate_Mining_Runbook_v1.0` — input/output, source-time semantics, capability hiện tại và target modules.
+- `Coarse_Classification_Plan_v1.0` — happy/edge/negative/random/risk streams.
+- `Candidate_Mining_Validation_Report_v0.1` — chỉ tạo sau khi review output raw-data thực tế.
 
-- Mapping candidate signal → test category.
-- Chốt risk score và quota sample theo slice.
-- Kiểm tra candidate có truy ngược tới `source_id`, timestamp, camera và ROI reference.
+**Đầu ra local sau khi chạy:** person detection JSON hiện có; candidate queue/manifest/cover/movement evidence chỉ tạo khi corresponding pipeline capability tồn tại.
 
-#### C
+#### A — QA / Test Design
 
-- Review tập nhỏ candidate: đúng/sai/bỏ sót/cắt thiếu context.
-- Đề xuất pre-roll, post-roll, merge gap.
+- Mapping candidate reason → test category chỉ là hỗ trợ sampling, không phải final label.
+- Kiểm tra coarse streams bao phủ normal, edge, negative/interference theo taxonomy Mục 4.
+- Ghi coverage gap hoặc capability gap thay vì tự coi module chưa có là đã chạy.
 
-**Đầu ra chung:** `mining_validation_report`.
+#### C — Annotation & Data Quality
 
-### Ngày 4 — Sampling có kiểm soát và phân loại thô
+- Review một tập candidate có context để đánh giá đủ/thiếu context, false candidate và missed-candidate risk.
+- Ghi feedback cho mining; không dùng output mining làm final ground truth.
+- Chỉ đề xuất pre-roll/post-roll/merge-gap như technical review feedback, không biến thành event/severity rule nghiệp vụ.
+
+**Đầu ra chung:** `Mining_Validation_Report_v0.1` sau khi có raw-data execution và human review.
+
+### Ngày 4 — Sampling có kiểm soát, phân loại tinh bởi con người
 
 Ba luồng sampling bắt buộc:
 
 | Luồng | Mục đích | Tỷ lệ khởi điểm |
 |---|---|---:|
-| Tool-selected candidates | Tăng tốc tìm positive candidate | 70% |
-| Random background samples | Phản ánh production và phát hiện bias/bỏ sót mining | 20% |
-| Risk-based samples | Bổ sung đêm, mưa, glare, rung, partial cover, edge case | 10% |
+| Tool-selected candidates | Tăng tốc tìm positive candidate; không thay nhãn người review | 70% |
+| Random background samples | Phản ánh production, kiểm tra bias/bỏ sót mining | 20% |
+| Risk-based samples | Bổ sung đêm, mưa, glare, rung, cover boundary và edge case | 10% |
 
-> Tỷ lệ là **sampling hypothesis v0.1**, có thể điều chỉnh sau mining validation; không phải quota bất biến.
+> Tỷ lệ là **sampling hypothesis v0.1**, được điều chỉnh theo inventory/mining validation; không phải quota bất biến.
 
 | Vai trò | Công việc | Đầu ra |
 |---|---|---|
-| A | Phân nhóm happy path, edge, hard negative, adversarial, coverage slice; kiểm tra quota | `Sampling_Strategy_v1.0` |
-| B | Chạy pipeline batch đầu, gộp/chuẩn hóa candidate, xuất manifest/proxy clip | `candidate_queue_v0.2`, `sampling_manifest_v0.1` |
-| C | Review nhanh: đủ pre/post context, đánh dấu ambiguous/invalid, feedback cho mining | `Candidate_Review_Feedback` |
+| A | Phân nhóm happy path, edge, hard negative, adversarial/interference và coverage slice; kiểm tra quota. | `Sampling_Strategy_v1.0` |
+| B | Gộp/chuẩn hóa candidate evidence theo source/time; chỉ export clip khi operator/reviewer chủ động cần context. | local candidate queue/manifest theo capability thực tế |
+| C | Review nhanh category, context, ROI evidence, cover area/duration hoặc movement evidence; đánh dấu `ambiguous/invalid` khi không đủ bằng chứng. | `Candidate_Review_Feedback`, `Annotation_Queue_Entry_Template` |
 
 ### Ngày 5 — Làm sạch bước đầu và review tuần
 
 | Vai trò | Công việc | Đầu ra |
 |---|---|---|
-| A | Đánh giá coverage, xác định gap và quyết định yêu cầu thêm data/controlled scenario | `Coverage_Gap_Report_v0.1`, kế hoạch annotation Tuần 3 |
-| B | Deduplicate, chuẩn hóa tên/format/timestamp, kiểm tra clip overlap, version manifest, đưa dữ liệu nhạy cảm vào storage kiểm soát | `dataset_manifest_draft_v0.1` |
-| C | Review ngẫu nhiên từng category; đánh giá candidate precision sơ bộ; kiểm tra mining recall bằng random background; cập nhật guideline | `Annotation_Readiness_Report`, `Labeling_Guideline_v0.3` |
+| A | Đánh giá coverage, gap và nhu cầu data bổ sung/controlled scenario. | `Coverage_Gap_Report_v0.1`, kế hoạch annotation Tuần 3 |
+| B | Deduplicate, chuẩn hóa tên/format/timestamp, kiểm tra overlap/source-group, version local manifest và local storage policy. | `dataset_manifest_draft_v0.1`, `Data_Cleaning_and_Validation_Report_v0.1` |
+| C | Review ngẫu nhiên các category; đánh giá annotation readiness và cập nhật guideline theo ambiguity thực tế. | `Annotation_Readiness_Report`, `Labeling_Guideline_v0.3` |
+
+**Quy tắc xử lý/cleaning:**
+
+- Chuẩn hóa `sample_id`, `source_id`, `camera_id`, source-relative timestamp, category và evidence reference.
+- Validate `start < end`, source tồn tại, required fields, label vocabulary và duplicate IDs.
+- Không xóa difficult-but-valid data chỉ để làm đẹp metric.
+- PII/raw video/JSON/export giữ local-only; chỉ áp dụng masking/ẩn danh khi có policy và không làm mất evidence review.
+- Đo class imbalance và dùng sampling/coverage để xử lý; không synthetic balance/duplicate sample khi chưa có phương án được phép.
+
+**Đầu ra tài liệu:** `Sensitive_Data_Handling_Policy_v1.0`, `Class_Balance_and_Sampling_Decision_v1.0`, `Week_2_Exit_Checklist_v1.0`.
 
 ### Gate kết thúc Tuần 2
 
@@ -437,12 +480,12 @@ Ba luồng sampling bắt buộc:
 #### C — Chủ trì
 
 1. Tổ chức calibration: A, B, C cùng gán 30–50 clip hoặc tập đại diện khả dụng.
-2. So sánh event type, positive/negative, event start/end, severity, ambiguous/invalid.
-3. Chốt các case khó: partial cover, glare/rain, temporary shake, sustained displacement, người ở ngoài ROI, nhiều event.
+2. So sánh event type, positive/negative, event start/end, ROI evidence, cover-rule satisfaction, ambiguous/invalid; severity chỉ đối chiếu với rule-engine output khi có.
+3. Chốt cách xử lý các case khó: partial cover, glare/rain, temporary shake, sustained displacement, người ở ngoài ROI, nhiều event.
 
 #### A
 
-- Adjudicate case nghiệp vụ; liên hệ stakeholder nếu rule vẫn thiếu.
+- Adjudicate case theo guideline/evidence; case thiếu rule-system output hoặc evidence được ghi unresolved/limitation, không tự suy diễn.
 - Xác nhận guideline không mâu thuẫn với acceptance criteria/KPI.
 
 #### B
@@ -457,7 +500,7 @@ Phân bổ khởi điểm:
 
 | Người | Quota | Ưu tiên |
 |---|---:|---|
-| A | 25% | Use case nghiệp vụ, severity, edge case |
+| A | 25% | Use case nghiệp vụ, ROI/category evidence, edge case |
 | B | 25% | Candidate kỹ thuật, cover/movement signal, log correlation |
 | C | 50% | Điều phối, annotation chính, sample khó |
 
@@ -473,7 +516,12 @@ event_label
 ground_truth_status
 event_start
 event_end
-expected_severity
+roi_zone
+rule_engine_rule_id
+rule_engine_rule_version
+rule_engine_severity_output
+cover_area_percent
+cover_duration_seconds
 lighting
 distance
 occlusion
@@ -490,20 +538,20 @@ comment
 | Vai trò | Công việc | Đầu ra |
 |---|---|---|
 | C | Chọn 10–20% clip cho hai người gán độc lập; đo percent agreement/Cohen’s Kappa (hoặc Fleiss’ Kappa), sai lệch start/end | `annotation_agreement_report`, `disagreement_queue` |
-| A | Adjudicate disagreement nghiệp vụ; gửi stakeholder case không thể quyết định theo guideline | `Business_Adjudication_Log` |
+| A | Adjudicate disagreement theo guideline/evidence; ghi unresolved/limitation nếu case không thể quyết định. | `Business_Adjudication_Log` |
 | B | Validate schema: `start < end`, label hợp lệ, source/clip tồn tại, không duplicate sample ID, required fields đủ, ROI reference hợp lệ | `schema_validation_report` |
 
 ### Ngày 4 — Khóa ground truth, test set và KPI
 
-#### C
+#### C — Annotation & Data Quality
 
-- Xử lý disagreement; gắn cờ unresolved case.
-- Khóa `ground_truth_v1.0`.
-- Chọn golden set nhỏ nhưng tất cả sample phải có review/adjudication chất lượng cao.
+- Xử lý disagreement; gắn cờ unresolved/ambiguous/invalid case.
+- Khóa `ground_truth_v1.0` chỉ với sample có review/adjudication/evidence đủ điều kiện.
+- Chọn golden set nhỏ; không đưa ambiguous, invalid, unresolved hoặc sample thiếu traceability vào golden set.
 
-#### B
+#### B — Data & Automation
 
-Tạo cấu trúc logic:
+Thiết kế và áp dụng cấu trúc logic local cho dataset/reference:
 
 ```text
 dataset/
@@ -519,40 +567,44 @@ dataset/
 └── documentation/
 ```
 
-- Khóa version/hashes/manifest.
-- Tạo bảng TP/FP/FN/TN và tính KPI **tách riêng** cho intrusion, cover, movement.
+- Khóa version/hashes/manifest của record/reference; raw video và generated sensitive artifacts vẫn local/Git-ignore.
+- Tạo bảng TP/FP/FN/TN và KPI **tách riêng** cho intrusion, cover, movement khi đủ event matching, alert evidence và ground truth.
+- Tách `review_category`/`roi_zone` khỏi `rule_engine_severity_output`.
 - Không để clip cùng source-group xuất hiện ở nhiều tập độc lập.
 
-#### A
+#### A — QA / Test Design
 
 - Review coverage theo use case, camera, ngày/đêm, event/negative, quality condition.
-- Đối chiếu KPI với ngưỡng pass/fail.
-- Không đánh dấu `Đạt` nếu sample chưa được khóa hoặc dữ liệu còn insufficient.
+- Đối chiếu KPI với ngưỡng pass/fail chỉ trên sample eligible.
+- Không đánh dấu `Đạt` nếu sample chưa khóa, rule matching thiếu, alert/rule-engine output không đủ hoặc dữ liệu insufficient.
 
-**Đầu ra:**
+**Đầu ra local sau execution:**
 
 - `ground_truth_v1.0`
 - `dataset_manifest_v1.0`
 - `coverage_report_v1.0`
 - `golden_set_v1.0`
-- `kpi_result_v1.0`.
+- `kpi_result_v1.0` hoặc report `Chưa kết luận` có limitation rõ ràng.
+
+**Đầu ra tài liệu:** `Ground_Truth_Release_Note_v1.0`, `Dataset_Version_and_Change_Log_v1.0`, `KPI_Evaluation_Report_v1.0`, `Golden_Set_Release_Note_v1.0`.
 
 ### Ngày 5 — Tài liệu hóa, review cuối và bàn giao
 
-| Vai trò | Công việc | Đầu ra |
+| Vai trò | Công việc | Đầu ra tài liệu |
 |---|---|---|
-| A | Dataset card, test-data strategy, coverage report, limitation/assumption, acceptance checklist, handover minutes | `Dataset_Card_v1.0`, `Final_Handover_Minutes` |
-| B | Pipeline README, requirements, cấu hình, hướng dẫn tái tạo candidate, version/hash/storage/permission | `Pipeline_README`, `Reproducibility_Guide` |
-| C | Guideline final, annotation statistics, agreement report, ambiguous list, hướng dẫn review/update nhãn | `Annotation_Quality_Pack` |
+| A | Dataset card, test-data strategy, coverage report, limitation/assumption và acceptance/handover checklist. | `Dataset_Card_v1.0`, `Final_Handover_Checklist_v1.0`, `Handover_Summary_v1.0` |
+| B | Pipeline README, requirements/configuration, hướng dẫn tái tạo candidate evidence, version/hash/storage/permission. | `Pipeline_README`, `Reproducibility_Guide`, `Controlled_Storage_and_Access_Guide_v1.0` |
+| C | Guideline final, annotation statistics, agreement report, ambiguous list và hướng dẫn review/update label. | `Annotation_Quality_Pack`, `Annotation_Agreement_Report_v1.0` |
 
 ### Gate kết thúc Tuần 3
 
 - [ ] Guideline v1.0 đã khóa; review/ground truth có version.
-- [ ] Disagreement được xử lý hoặc được ghi rõ là unresolved/ambiguous.
-- [ ] Có schema validation, coverage report và manifest/hash.
-- [ ] Có benchmark, production-distribution và golden set; golden không chứa ambiguous.
-- [ ] KPI cho từng nhóm có TP/FP/FN/TN, công thức và evidence truy vết.
-- [ ] Có dataset documentation và biên bản bàn giao.
+- [ ] Disagreement được xử lý hoặc được ghi rõ là unresolved/ambiguous/invalid.
+- [ ] Có schema validation, coverage report và manifest/hash/reference.
+- [ ] Có benchmark, production-distribution và golden set; golden không chứa ambiguous/invalid/unresolved.
+- [ ] KPI cho từng nhóm có TP/FP/FN/TN, công thức và evidence truy vết hoặc ghi `Chưa kết luận` có lý do.
+- [ ] Rule-engine severity chỉ được report khi có output/rule reference; không phải reviewer label.
+- [ ] Có dataset documentation, reproducibility guide và handover checklist/summary.
 
 ---
 
@@ -573,7 +625,7 @@ dataset/
 | **Đạt** | Sample được khóa/review; Precision ≥ 90%, Recall ≥ 90%, FP/(TP+FP) ≤ 10% cho nhóm kịch bản tương ứng |
 | **Không đạt** | Có đủ sample hợp lệ nhưng ít nhất một KPI không đạt |
 | **Chưa kết luận** | Dữ liệu/số lượng sample không đủ, train leakage chưa xác minh, hoặc còn nhiều case unresolved/ambiguous |
-| **Rủi ro chấp nhận** | Stakeholder phê duyệt chấp nhận limitation đã mô tả kèm tác động và kế hoạch xử lý |
+| **Rủi ro chấp nhận** | Limitation được ghi rõ tác động, evidence hiện có và kế hoạch xử lý tiếp theo; không biến limitation thành kết luận KPI đạt. |
 
 ### 8.3. Metric bổ sung khuyến nghị
 
@@ -600,11 +652,13 @@ Các metric này không thay thế KPI chính thức:
 ### 9.2. Evidence tối thiểu cho mỗi sample/case
 
 - sample/source/camera ID;
-- video gốc hoặc proxy clip và timestamp;
-- ROI config/version/snapshot reference;
-- ground truth và reviewer;
-- alert/log/response hệ thống;
-- expected result, actual result, verdict;
+- video gốc và source-relative timestamp; local export clip chỉ là evidence phụ khi reviewer chủ động tạo;
+- ROI config/version/snapshot reference khi use case phụ thuộc ROI;
+- ground truth/category và reviewer;
+- alert/log/response hệ thống khi có quyền truy cập;
+- expected category/rule evidence, actual system output, verdict;
+- `rule_engine_rule_id`/version và `rule_engine_severity_output` khi hệ thống cung cấp;
+- `cover_area_percent`/`cover_duration_seconds` khi use case là cover;
 - `run_id`, defect ID (nếu có), link evidence.
 
 ### 9.3. Kiểm soát thông tin nhạy cảm
@@ -619,28 +673,28 @@ Các metric này không thay thế KPI chính thức:
 
 | Tuần | Deliverable | Owner | Reviewer |
 |---|---|---|---|
-| 1 | Business clarification, objectives, use case, acceptance criteria, event/KPI rules | A | B, C, stakeholder |
-| 1 | Technical readiness, ROI evidence checklist, pipeline/manifest design, dry-run evidence | B | A |
-| 1 | Taxonomy, metadata schema, guideline v0.2, calibration plan | C | A, B |
+| 1 | Scope/use case/acceptance/KPI documents: mô tả model evaluation, category, ROI/severity boundary, pass/fail và metric rule; chưa có kết quả data thực tế | A | B, C |
+| 1 | Technical design documents: readiness checklist, ROI-evidence checklist, folder/manifest/pipeline design, inventory/leakage/KPI-input template; không có dry-run evidence | B | A |
+| 1 | Annotation design documents: taxonomy, metadata schema, guideline v0.2, calibration/agreement/queue plan; chưa có annotation hoặc calibration result | C | A, B |
 | 2 | Video inventory, invalid/duplicate report, leakage/split/distribution report | B | A, C |
-| 2 | Candidate pipeline, event manifest, proxy clips, sampling manifest | B | A, C |
+| 2 | Candidate evidence theo capability thực tế, sampling manifest tool/random/risk, mining validation và annotation readiness; export clip chỉ thủ công khi cần context | B | A, C |
 | 2 | Coverage gap report, annotation readiness, guideline v0.3 | A/C | B |
 | 3 | Guideline v1.0, annotation dataset, agreement/disagreement report | C | A, B |
 | 3 | Schema validation, dataset manifest/hash, reproducibility guide | B | A, C |
 | 3 | Ground truth, coverage report, golden set, KPI result | C/A | B |
-| 3 | Dataset card, pipeline README, handover checklist/minutes | A | B, C |
+| 3 | Dataset card, pipeline README, reproducibility guide, handover checklist/summary | A | B, C |
 
 ---
 
 ## 11. Daily control, Definition of Done và rủi ro
 
-### 11.1. Daily stand-up — 15 phút
+### 11.1. Daily coordination — 15 phút
 
-Mỗi người trả lời:
+Đây là nhịp phối hợp nội bộ khi nhóm thực hiện, không phải biên bản một cuộc họp đã diễn ra. Mỗi người cập nhật:
 
-1. Hôm qua đã hoàn thành gì và evidence ở đâu?
+1. Hôm trước đã hoàn thành gì và evidence/document ở đâu?
 2. Hôm nay làm gì?
-3. Blocker nào cần owner xử lý?
+3. Limitation hoặc dependency nào ảnh hưởng execution?
 4. Có thay đổi nào ảnh hưởng dataset, guideline, KPI hoặc ROI evidence?
 
 ### 11.2. Daily status table
@@ -660,16 +714,16 @@ Done
 
 ### 11.3. Rủi ro chính
 
-| Rủi ro | Ảnh hưởng | Owner | Biện pháp |
+| Rủi ro | Ảnh hưởng | Phụ trách nội bộ | Biện pháp |
 |---|---|---|---|
 | Không có train-data list | Không chứng nhận test độc lập | B | Gắn `Unknown`, ghi limitation |
-| Cấp 2/3 hoặc event boundary mơ hồ | Nhãn/KPI không nhất quán | A/C | Khóa guideline; stakeholder adjudication |
-| Video quá lớn/máy hạn chế | Chậm mining/review | B | Streaming, sampling, proxy clip, một worker/model nhỏ |
+| Cấp 2/3, event boundary hoặc rule-engine output thiếu | Severity/KPI verification không nhất quán | A/C | Video review chỉ ghi category/ROI; ghi unresolved/limitation, không tự suy diễn severity. |
+| Video quá lớn/máy hạn chế | Chậm mining/review | B | Streaming, sampling, seek theo timestamp và manual export clip khi cần context |
 | Mining bỏ sót event | Dataset thiên lệch | B/C | Random background và risk-based sampling |
 | Reviewer bị model output ảnh hưởng | Automation bias | C | Blind review, golden review độc lập |
 | Nhiều clip trùng | KPI sai lệch | B | Source-group split, checksum/fingerprint |
-| Không đủ positive event | Coverage thấp | A | Controlled scenario/synthetic data phase sau |
-| Video có PII | Rủi ro bảo mật | B/C | Access control, retention/masking theo policy |
+| Không đủ positive event | Coverage thấp | A | Ghi coverage gap; controlled scenario/synthetic data chỉ là phase sau nếu được phép |
+| Video có PII | Rủi ro bảo mật | B/C | Local access control, retention/masking theo policy |
 | KPI mẫu nhỏ | Kết luận không tin cậy | A | Ghi `Chưa kết luận`, nêu sample size/limitation |
 
 ---
@@ -679,15 +733,15 @@ Done
 ### Tuần 1 hoàn thành khi
 
 - Có mục tiêu testing, use case, acceptance criteria và KPI calculation rule.
-- Có event/ROI/severity rule đủ để gán nhãn.
-- Câu hỏi chưa trả lời được ghi là assumption/blocker có owner.
-- Có readiness/pipeline/metadata/taxonomy/guideline nháp.
-- Có dry run evidence cho ba nhóm kịch bản.
+- Cover ≥30%/≥120s, ROI category và rule-engine severity boundary được đưa đúng vào taxonomy/guideline.
+- Các điểm chưa có system/data evidence được ghi limitation/dependency, không gán owner/approval giả và không tự suy diễn rule.
+- Có readiness/pipeline/metadata/taxonomy/guideline nháp cùng folder/manifest/template để nhận data.
+- **Không yêu cầu dry run evidence, inventory, candidate, review clip, annotation hay KPI result**, vì raw data chỉ được nhận từ Tuần 2.
 
 ### Tuần 2 hoàn thành khi
 
 - Data đã inventory; duplicate/leakage/eligibility được báo cáo.
-- Có candidate mining, proxy clips, sampling manifest gồm tool/random/risk stream.
+- Có candidate evidence và sampling manifest gồm tool/random/risk stream theo capability thực tế; manual export clip chỉ tạo khi reviewer/operator chủ động cần context.
 - Candidate truy vết được về source và không được coi là ground truth.
 - Có coverage gap và data sẵn sàng annotation.
 
@@ -711,8 +765,8 @@ Done
 | Tiền điều kiện | Camera, stream, ROI version, môi trường |
 | Input/sample | `sample_id`, `source_id`, clip/path |
 | Thao tác/kịch bản | Mô tả hành động thực tế |
-| Ground truth | Nhãn, start/end, severity mong đợi |
-| Kết quả mong đợi | Alert/type/severity/timestamp/evidence |
+| Ground truth | Nhãn/category, start/end, ROI evidence; severity không do reviewer tự gán |
+| Kết quả mong đợi | Alert/type/timestamp/evidence; `rule_engine_severity_output` chỉ khi system rule/output có sẵn |
 | Kết quả thực tế | Giá trị quan sát từ hệ thống |
 | Phân loại KPI | TP / FP / FN / TN / Ambiguous / Invalid |
 | Bằng chứng | Link video, snapshot ROI, log/alert |
