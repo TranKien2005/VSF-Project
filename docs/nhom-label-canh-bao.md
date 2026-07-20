@@ -2,9 +2,9 @@
 
 | Nhóm | Label | Ý nghĩa | Loại dữ liệu | Khoảng cách |
 |---|---|---|---|---|
-| Đột nhập/Trèo rào | `nguoi_lang_vang` | Người di chuyển hoặc đứng lâu trong ROI xanh | `positive` | 10/20/30/40 m |
-| Đột nhập/Trèo rào | `nguoi_tiep_can_hang_rao` | Người đi vào hoặc chạm ROI vàng sát hàng rào | `positive` | 10/20/30/40 m |
-| Đột nhập/Trèo rào | `nguoi_treo_rao` | Người trèo lên hàng rào, chạm ROI đỏ hoặc vào khu cấm | `positive` | 10/20/30/40 m |
+| Đột nhập/Trèo rào | `nguoi_lang_vang` | Người di chuyển hoặc đứng lâu trong ROI xanh | `positive` | tối đa là 40 m |
+| Đột nhập/Trèo rào | `nguoi_tiep_can_hang_rao` | Người đi vào hoặc chạm ROI vàng sát hàng rào | `positive` | tối đa là 40 m |
+| Đột nhập/Trèo rào | `nguoi_treo_rao` | Người trèo lên hàng rào, chạm ROI đỏ hoặc vào khu cấm | `positive` | tối đa là 40 m|
 | Che camera | `che_camera_ngan` | Camera bị che nhưng thời gian dưới 2 phút | `positive` | — |
 | Che camera | `che_camera_dai` | Camera bị che liên tục từ 2 phút trở lên và diện tích che đạt ngưỡng | `positive` | — |
 | Che camera | `choi_den_xe` | Ánh đèn xe quét qua camera gây sáng hoặc tối hình tạm thời | `positive` | — |
