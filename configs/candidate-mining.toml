@@ -1,11 +1,8 @@
 [paths]
-raw_dir = "data/raw"
-inventory_dir = "data/inventory"
-manifest_dir = "data/manifests"
-review_queue_dir = "data/review_queue"
+# Local sensitive metadata and technical candidate artifacts. Imported videos remain external.
+processed_dir = "data/processed"
+results_dir = "data/results"
 log_dir = "outputs/logs"
-report_dir = "outputs/reports"
-model_cache_dir = "models/cache"
 model_weights_dir = "models/weights"
 torch_cache_dir = ".cache/torch"
 ffmpeg_dir = "tools/ffmpeg"
@@ -44,7 +41,8 @@ optional = false
 confidence_threshold = 0.20
 iou_threshold = 0.45
 image_size = 960
-batch_size = 1
+# Start conservatively; increase after benchmarking the selected source/GPU.
+batch_size = 4
 device = "auto"
 half_precision = true
 person_episode_gap_seconds = 8.0

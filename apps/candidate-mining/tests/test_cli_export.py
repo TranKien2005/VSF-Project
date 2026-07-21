@@ -71,9 +71,7 @@ def test_bbox_export_span_uses_store_and_context_bounds(monkeypatch, tmp_path) -
 
     _export_span(source, store, Span(), app_config(tmp_path), annotated=True)
 
-    assert calls == [
-        ((source, 1.0, 6.0, target, store), {"ffmpeg": tmp_path / "tools" / "ffmpeg" / "ffmpeg.exe"})
-    ]
+    assert calls == [((source, 1.0, 6.0, target, store), {"ffmpeg": tmp_path / "tools" / "ffmpeg" / "ffmpeg.exe"})]
 
 
 def test_export_span_declined_overwrite_leaves_existing_target(monkeypatch, tmp_path) -> None:

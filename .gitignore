@@ -12,11 +12,9 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Sensitive / large video data and generated review artifacts
-data/raw/**
-data/inventory/**
-data/manifests/**
-data/review_queue/**
+# Sensitive local processed-source metadata, technical candidates, and runtime logs
+data/processed/**
+data/results/**
 outputs/logs/**
 
 # Local model artifacts and framework caches
@@ -27,21 +25,7 @@ models/weights/**
 # Local portable FFmpeg distribution; provisioned separately, never commit.
 tools/ffmpeg/**
 
-# Keep the directory layout without tracking contents
-!data/raw/.gitkeep
-!data/inventory/.gitkeep
-!data/manifests/.gitkeep
-!data/review_queue/.gitkeep
-!data/review_queue/person_detected/
-!data/review_queue/person_detected/.gitkeep
-!data/review_queue/camera_cover/
-!data/review_queue/camera_cover/.gitkeep
-!data/review_queue/camera_movement/
-!data/review_queue/camera_movement/.gitkeep
-!data/review_queue/anomaly_unknown/
-!data/review_queue/anomaly_unknown/.gitkeep
-!data/review_queue/random_background/
-!data/review_queue/random_background/.gitkeep
+# Keep tracked local layout placeholders where useful
 !models/
 !models/README.md
 !models/cache/

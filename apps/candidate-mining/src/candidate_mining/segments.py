@@ -61,9 +61,7 @@ def merge_person_presence_signals(signals: list[Signal], presence_gap_seconds: f
 
 
 def merge_non_person_signals(signals: list[Signal], merge_gap_seconds: float) -> list[Segment]:
-    return merge_signals(
-        [signal for signal in signals if signal.category != "person_detected"], merge_gap_seconds
-    )
+    return merge_signals([signal for signal in signals if signal.category != "person_detected"], merge_gap_seconds)
 
 
 def _merge_segments(left: Segment, right: Segment) -> Segment:
@@ -79,9 +77,7 @@ def _merge_segments(left: Segment, right: Segment) -> Segment:
         anomaly_types=left.anomaly_types | right.anomaly_types,
         track_ids=left.track_ids | right.track_ids,
         episode_ids=left.episode_ids | right.episode_ids,
-        track_reconciliation_statuses=(
-            left.track_reconciliation_statuses | right.track_reconciliation_statuses
-        ),
+        track_reconciliation_statuses=(left.track_reconciliation_statuses | right.track_reconciliation_statuses),
     )
     return combined
 

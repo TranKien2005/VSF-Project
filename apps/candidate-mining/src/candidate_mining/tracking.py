@@ -99,12 +99,8 @@ class PersonEpisodeTracker:
                 episode_id = f"episode_{self._next_episode_number:06d}"
                 self._next_episode_number += 1
                 status = "new_episode"
-            self._active[track_id] = _ActiveTrack(
-                track_id, episode_id, timestamp_sec, detection.bbox_xyxy
-            )
-            observations.append(
-                TrackObservation(timestamp_sec, track_id, episode_id, status, detection)
-            )
+            self._active[track_id] = _ActiveTrack(track_id, episode_id, timestamp_sec, detection.bbox_xyxy)
+            observations.append(TrackObservation(timestamp_sec, track_id, episode_id, status, detection))
         self._active = {
             track_id: track
             for track_id, track in self._active.items()

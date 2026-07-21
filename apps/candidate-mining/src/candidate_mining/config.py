@@ -9,10 +9,8 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class PathsConfig:
-    raw_dir: Path
-    inventory_dir: Path
-    manifest_dir: Path
-    review_queue_dir: Path
+    processed_dir: Path
+    results_dir: Path
     log_dir: Path
     ffmpeg_dir: Path
     model_weights_dir: Path
@@ -71,10 +69,8 @@ def load_config(config_path: Path | None = None) -> AppConfig:
     paths_raw = raw["paths"]
     pipeline_raw = raw["pipeline"]
     paths = PathsConfig(
-        raw_dir=_under_root(root, paths_raw["raw_dir"]),
-        inventory_dir=_under_root(root, paths_raw["inventory_dir"]),
-        manifest_dir=_under_root(root, paths_raw["manifest_dir"]),
-        review_queue_dir=_under_root(root, paths_raw["review_queue_dir"]),
+        processed_dir=_under_root(root, paths_raw["processed_dir"]),
+        results_dir=_under_root(root, paths_raw["results_dir"]),
         log_dir=_under_root(root, paths_raw["log_dir"]),
         ffmpeg_dir=_under_root(root, paths_raw["ffmpeg_dir"]),
         model_weights_dir=_under_root(root, paths_raw["model_weights_dir"]),
@@ -103,12 +99,15 @@ def load_config(config_path: Path | None = None) -> AppConfig:
     )
     if pipeline.sample_fps <= 0:
         raise ValueError("sample_fps must be positive")
-    if min(
-        pipeline.person_presence_merge_gap_seconds,
-        pipeline.merge_gap_seconds,
-        pipeline.pre_roll_seconds,
-        pipeline.post_roll_seconds,
-    ) < 0:
+    if (
+        min(
+            pipeline.person_presence_merge_gap_seconds,
+            pipeline.merge_gap_seconds,
+            pipeline.pre_roll_seconds,
+            pipeline.post_roll_seconds,
+        )
+        < 0
+    ):
         raise ValueError("Gap and context durations must be non-negative")
     if pipeline.random_background_duration_seconds <= 0 or pipeline.random_background_count < 0:
         raise ValueError("Random-background duration must be positive and count non-negative")

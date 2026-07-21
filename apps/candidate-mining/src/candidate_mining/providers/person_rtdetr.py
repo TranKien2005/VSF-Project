@@ -58,7 +58,7 @@ class RtdetrPersonProvider:
             iou=self.settings.iou_threshold,
             imgsz=self.settings.image_size,
             device=self._device,
-            half=bool(self.settings.half_precision and self._device != "cpu"),
+            quantize=16 if self.settings.half_precision and self._device != "cpu" else None,
             verbose=False,
         )
         output: list[list[PersonDetection]] = []

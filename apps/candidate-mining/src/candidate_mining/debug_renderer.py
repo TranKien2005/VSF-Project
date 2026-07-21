@@ -8,9 +8,7 @@ from pathlib import Path
 from .debug_artifacts import PersonDetectionStore, StoredDetection
 
 
-def held_detections_by_frame(
-    detections: tuple[StoredDetection, ...], source_frame_index: int
-) -> list[StoredDetection]:
+def held_detections_by_frame(detections: tuple[StoredDetection, ...], source_frame_index: int) -> list[StoredDetection]:
     """Hold the latest real detector snapshot until the next sampled frame."""
     snapshots: dict[int, list[StoredDetection]] = {}
     for item in detections:
