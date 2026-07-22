@@ -1,21 +1,16 @@
-# Desktop one-line ROI workflow
+# Desktop technical-evidence workflow
 
 ## Scope
 
-The desktop application prepares technical person-detection evidence for later human review. It never automatically decides intrusion, authorization, loitering, severity, a final label, or ground truth.
+The desktop application prepares technical evidence for later human review. It does not automatically decide intrusion, authorization, loitering, severity, a final label, ground truth, or KPI.
 
-Person detection is full-frame RT-DETR-L inference sampled at 5 FPS. The UI holds the last saved bbox snapshot until the next sample. This visual policy is not inference at every source frame and does not interpolate or predict movement.
+The configured person lane uses full-frame RT-DETR-L inference filtered to COCO `person`. The current default sampling rate is **2 FPS**; the Process tab can override sampling and batch size for one run. The UI holds the most recent saved bbox snapshot until the next sample. This is a display policy, not inference on every source frame and not motion interpolation.
 
-## Import and durable linking
+## Import and durable source metadata
 
-Use **Sources** to import either:
+Use **Sources** to import either independent external video files or a camera folder. Import never copies or changes source media. It probes the source, computes its full SHA-256 checksum as `source-id`, and keeps the external absolute path as a locator.
 
-- one or more independent external video files; or
-- one outer folder representing one camera.
-
-For a camera import, the selected outer folder name becomes the camera name. All supported videos recursively below that folder belong to that one camera; intermediate directory names are not camera names.
-
-Import never copies or changes source media. It computes the full SHA-256 checksum and uses it as `source-id`. `data/processed/` and `data/results/` link through that ID and the source checksum, not an absolute path. This allows those local artifact folders to be copied to a different machine: re-importing an unchanged source restores the link at its new path.
+Before processing or export, the selected source must exist and its checksum must still match the registered metadata. Imported metadata and results are source-scoped:
 
 ```text
 data/processed/
@@ -27,36 +22,35 @@ data/processed/
   cameras/<camera-id>/videos/<source-id>/roi.json
 
 data/results/
-  person_detected/<candidate-id>/candidate.json
-  roi_track/<candidate-id>/candidate.json
+  videos/<source-id>/<category>/<candidate-id>/candidate.json
+  cameras/<camera-id>/videos/<source-id>/<category>/<candidate-id>/candidate.json
 ```
 
-`processed` contains imported source/camera metadata and optional ROI configuration only. It must not contain detections, candidate boxes, technical categories, final labels, or review state.
+`data/processed/` contains source/camera metadata and optional ROI configuration only. It must not contain detections, candidate boxes, technical categories, final labels, or review state.
 
-## One straight-line track ROI
+## Freehand track ROI
 
-ROI Setup deliberately has one interaction, not multiple zone types:
+ROI Setup has one freehand-stroke interaction:
 
-1. Open the selected source and seek to a stable reference frame.
-2. Click-drag one straight divider line. Freehand/polygon drawing, capture zones, core zones, and multiple ROI controls are not supported.
-3. The application treats the stroke as an infinite line, finds its two intersections with the frame boundary, and accepts endpoints that extend slightly outside the image.
-4. The line plus frame edges divides the image into two closed partitions. The application computes both areas and shades the **smaller** partition.
-5. Save either a source override or—only for a camera-owned source—a shared camera default.
+1. Load a source reference frame.
+2. Draw one simple stroke inside the frame.
+3. A near-closed stroke can form its own closed region. Otherwise, endpoint tangents extend to the frame boundary and close the stroke with frame edges.
+4. The smaller derived partition is selected by default; the operator may flip to the opposite partition.
+5. Save either a source override or, for a camera-owned source, a camera shared default.
 
-A source override wins over the camera shared ROI; otherwise the camera ROI applies; otherwise there is no ROI-derived candidate.
+Effective ROI precedence is source override → camera shared ROI → none. A detection belongs to the tracking ROI only if its bbox bottom-centre footpoint lies in the selected region; boundary points are included. The detector always analyzes the complete frame.
 
-A saved ROI contains normalized operator endpoints, the derived edge intersections and smaller polygon, reference frame metadata, revision, and a stable snapshot hash. A person bbox is technically inside only when its bottom-centre footpoint lies in the selected polygon. Boundary points are included. The detector still analyses the complete frame.
+## Processing, review, and export
 
-## Processing and results
+Processing requires a registered, checksum-verified source and effective saved ROI. The application samples the source, performs detection and technical tracking, and atomically publishes source-scoped `technical-candidate.v2` records.
 
-Processing one selected imported source writes technical candidates only under `data/results/`:
+- `person_detected` records are ROI-filtered technical person evidence. Track/episode IDs are diagnostics, not identity or final labels.
+- `camera_anomaly` may be emitted as a generic secondary technical signal. It is not a complete classification of cover, rain, glare, shake, or rotation.
+- Each candidate stores source/camera checksum provenance, category, trigger reason, candidate/context time bounds, saved technical detections, diagnostics, review state, and ROI provenance.
 
-- `person_detected`: source-level any-person logical spans merged by configured detector-gap settings;
-- `roi_track`: detections whose footpoints lie in the effective one-line ROI, likewise merged without relying on track continuity.
+The Review tab loads candidate context from the source video and marks the context start/end on the timeline. Technical boxes and ROI overlays are review aids only.
 
-Each `candidate.json` stores one source-relative candidate/context unit. It includes source/camera checksum provenance, category and trigger reason, context bounds, all relevant saved boxes, non-identity track/episode diagnostics, review state, and effective ROI provenance. Category directories express technical origin, never a human/business final label.
-
-No MP4 is generated by processing. Export is a later explicit operator action with destination selection and overwrite confirmation.
+No MP4 is generated during processing. Export is a later explicit operator action: clean export uses FFmpeg, and annotated export uses persisted evidence rather than rerunning the detector.
 
 ## Launch and checks
 
