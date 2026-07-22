@@ -26,6 +26,20 @@ def held_detections(
     return [] if position < 0 else snapshots[frame_indices[position]]
 
 
+def held_detections_by_time(
+    detections: tuple[StoredDetection, ...] | list[StoredDetection], current_sec: float
+) -> list[StoredDetection]:
+    """Resolve a detector snapshot by absolute timestamp (seconds) for FPS-independent playback."""
+    if not detections:
+        return []
+    snapshots: dict[float, list[StoredDetection]] = {}
+    for item in detections:
+        snapshots.setdefault(item.timestamp_sec, []).append(item)
+    timestamps = sorted(snapshots)
+    position = bisect_right(timestamps, current_sec) - 1
+    return [] if position < 0 else snapshots[timestamps[position]]
+
+
 def inspect_raw_video(
     video_path: Path,
     store: PersonDetectionStore,
@@ -134,9 +148,10 @@ def _draw_detection(frame: object, item: object, store: PersonDetectionStore) ->
     right, bottom = round(x2 * x_scale), round(y2 * y_scale)
     if right <= left or bottom <= top:
         return
-    color = (0, 220, 0)
+    color = (0, 220, 0) if item.motion_confirmed else (0, 180, 255)
+    label_prefix = "person" if item.motion_confirmed else "suspect"
     cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
-    label = f"person {item.confidence:.2f} t{item.track_id} {item.episode_id}"
+    label = f"{label_prefix} {item.confidence:.2f} t{item.track_id} {item.episode_id}"
     cv2.putText(frame, label, (left, max(18, top - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1, cv2.LINE_AA)
 
 

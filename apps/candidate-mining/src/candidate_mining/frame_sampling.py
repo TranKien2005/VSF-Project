@@ -20,6 +20,7 @@ def sample_video_frames(video_path: Path, sample_fps: float) -> Iterator[Sampled
         raise ValueError("sample_fps must be positive")
     import cv2
 
+    cv2.setNumThreads(4)
     capture = cv2.VideoCapture(str(video_path))
     if not capture.isOpened():
         raise RuntimeError(f"OpenCV could not open video: {video_path}")
@@ -30,12 +31,16 @@ def sample_video_frames(video_path: Path, sample_fps: float) -> Iterator[Sampled
         frame_interval = max(1, round(source_fps / sample_fps))
         index = 0
         while True:
-            ok, frame = capture.read()
-            if not ok:
-                break
             if index % frame_interval == 0:
+                ok, frame = capture.read()
+                if not ok:
+                    break
                 timestamp = capture.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
                 yield SampledFrame(timestamp_sec=timestamp, bgr=frame, source_frame_index=index)
+            else:
+                ok = capture.grab()
+                if not ok:
+                    break
             index += 1
     finally:
         capture.release()

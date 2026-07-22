@@ -7,9 +7,7 @@ from typing import Literal
 
 TOOL_CATEGORIES = (
     "person_detected",
-    "camera_cover",
-    "camera_movement",
-    "anomaly_unknown",
+    "camera_anomaly",
 )
 ALL_CATEGORIES = (*TOOL_CATEGORIES, "random_background")
 ANOMALY_TYPES = (
@@ -39,12 +37,12 @@ MANIFEST_FIELDS = (
     "brightness_score",
     "blur_score",
     "camera_shift_score",
-    "context_status",
-    "review_status",
     "anomaly_types",
     "person_track_ids",
     "person_episode_ids",
     "track_reconciliation_status",
+    "context_status",
+    "review_status",
 )
 
 
@@ -67,7 +65,7 @@ class VideoInventory:
 @dataclass(frozen=True)
 class Signal:
     timestamp_sec: float
-    category: Literal["person_detected", "camera_cover", "camera_movement", "anomaly_unknown"]
+    category: Literal["person_detected", "camera_anomaly"]
     person_count: int | None = None
     motion_score: float | None = None
     brightness_score: float | None = None

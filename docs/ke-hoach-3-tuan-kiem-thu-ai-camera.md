@@ -557,8 +557,7 @@ Thiết kế và áp dụng cấu trúc logic local cho dataset/reference:
 dataset/
 ├── benchmark/
 │   ├── intrusion/
-│   ├── camera_cover/
-│   ├── camera_move/
+│   ├── camera_anomaly/
 │   └── negative/
 ├── production_distribution/
 ├── stress/                 # chỉ nếu có đủ dữ liệu/môi trường
@@ -568,7 +567,7 @@ dataset/
 ```
 
 - Khóa version/hashes/manifest của record/reference; raw video và generated sensitive artifacts vẫn local/Git-ignore.
-- Tạo bảng TP/FP/FN/TN và KPI **tách riêng** cho intrusion, cover, movement khi đủ event matching, alert evidence và ground truth.
+- Tạo bảng TP/FP/FN/TN và KPI **tách riêng** cho intrusion, camera_anomaly khi đủ event matching, alert evidence và ground truth.
 - Tách `review_category`/`roi_zone` khỏi `rule_engine_severity_output`.
 - Không để clip cùng source-group xuất hiện ở nhiều tập độc lập.
 

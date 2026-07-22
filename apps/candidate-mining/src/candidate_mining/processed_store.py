@@ -7,6 +7,7 @@ candidates belong in ``data/results`` rather than this module's processed tree.
 from __future__ import annotations
 
 import json
+import subprocess
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -204,7 +205,12 @@ def resolve_source(record: ProcessedSource) -> Path:
 
 
 def import_video_files(
-    paths: list[Path], processed_dir: Path, tools: MediaTools, *, camera_id: str | None = None
+    paths: list[Path],
+    processed_dir: Path,
+    tools: MediaTools,
+    *,
+    camera_id: str | None = None,
+    on_progress: object | None = None,
 ) -> tuple[list[ProcessedSource], list[str]]:
     """Register explicit external files without copying or modifying them."""
     candidates = sorted(
@@ -213,10 +219,13 @@ def import_video_files(
     )
     records: list[ProcessedSource] = []
     failures: list[str] = []
-    for video_path in candidates:
+    total = len(candidates)
+    for index, video_path in enumerate(candidates, start=1):
+        if on_progress:
+            on_progress(index, total, video_path.name)
         try:
             inventory = probe_video(video_path, ffprobe=tools.ffprobe)
-        except (OSError, ValueError, json.JSONDecodeError) as error:
+        except (OSError, ValueError, json.JSONDecodeError, subprocess.CalledProcessError) as error:
             failures.append(f"{video_path}: {error}")
             continue
         record = ProcessedSource(
@@ -238,23 +247,63 @@ def import_video_files(
     return records, failures
 
 
+def _is_macos_junk(path: Path) -> bool:
+    """Return True for macOS resource fork metadata files and __MACOSX directories."""
+    if path.name.startswith("._"):
+        return True
+    return any(part == "__MACOSX" for part in path.parts)
+
+
 def import_camera_folder(
-    folder: Path, processed_dir: Path, tools: MediaTools, *, camera_name: str | None = None
-) -> tuple[CameraRecord, list[ProcessedSource], list[str]]:
-    """Register all supported videos in a folder as files of one camera."""
+    folder: Path,
+    processed_dir: Path,
+    tools: MediaTools,
+    *,
+    camera_name: str | None = None,
+    on_progress: object | None = None,
+) -> tuple[list[CameraRecord], list[ProcessedSource], list[str]]:
+    """Register all supported videos in a folder, auto-grouping by immediate camera subfolder."""
     resolved = folder.resolve()
     if not resolved.is_dir():
         raise ValueError(f"Camera folder does not exist: {resolved}")
-    camera_id = _safe_id(camera_name or resolved.name)
-    camera = CameraRecord(camera_id=camera_id, name=camera_name or resolved.name, imported_folder_at_registration=str(resolved))
-    write_camera(camera, processed_dir)
-    videos = [path for path in resolved.rglob("*") if path.is_file() and path.suffix.casefold() in VIDEO_EXTENSIONS]
-    records, failures = import_video_files(videos, processed_dir, tools, camera_id=camera.camera_id)
-    return camera, records, failures
+    videos = [
+        path
+        for path in resolved.rglob("*")
+        if path.is_file() and path.suffix.casefold() in VIDEO_EXTENSIONS and not _is_macos_junk(path)
+    ]
+    if not videos:
+        return [], [], []
+
+    camera_groups: dict[Path, list[Path]] = {}
+    for video in videos:
+        cam_dir = video.parent
+        camera_groups.setdefault(cam_dir, []).append(video)
+
+    cameras: list[CameraRecord] = []
+    all_records: list[ProcessedSource] = []
+    all_failures: list[str] = []
+
+    for cam_dir, group_videos in camera_groups.items():
+        name = camera_name if (len(camera_groups) == 1 and camera_name) else cam_dir.name
+        camera_id = _safe_id(name)
+        camera = CameraRecord(
+            camera_id=camera_id,
+            name=name,
+            imported_folder_at_registration=str(cam_dir),
+        )
+        write_camera(camera, processed_dir)
+        cameras.append(camera)
+        records, failures = import_video_files(
+            group_videos, processed_dir, tools, camera_id=camera.camera_id, on_progress=on_progress
+        )
+        all_records.extend(records)
+        all_failures.extend(failures)
+
+    return cameras, all_records, all_failures
 
 
 def import_paths(paths: list[Path], processed_dir: Path, tools: MediaTools) -> tuple[list[ProcessedSource], list[str]]:
-    """Import files as independent videos and each selected directory as a camera folder."""
+    """Import files as independent videos and each selected directory as camera folders."""
     records, failures = import_video_files(paths, processed_dir, tools)
     for path in paths:
         if path.is_dir():

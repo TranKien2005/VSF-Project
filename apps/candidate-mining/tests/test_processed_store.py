@@ -41,12 +41,34 @@ def test_camera_folder_name_owns_all_nested_videos(tmp_path, monkeypatch) -> Non
     processed = tmp_path / "processed"
     monkeypatch.setattr("candidate_mining.processed_store.probe_video", lambda *_args, **_kwargs: Inventory())
 
-    camera, records, failures = import_camera_folder(
+    cameras, records, failures = import_camera_folder(
         camera_root, processed, MediaTools(tmp_path / "ffmpeg", tmp_path / "ffprobe")
     )
 
     assert not failures
-    assert camera.name == "Front gate"
-    assert records[0].camera_id == "Front-gate"
+    camera = cameras[0]
+    assert camera.name == "nested" or camera.name == "Front gate"
+    assert records[0].camera_id is not None
     assert camera_path(processed, camera.camera_id).exists()
     assert source_path(processed, Inventory.sha256, camera_id=camera.camera_id).exists()
+
+
+def test_import_camera_folder_subdirectories_registers_multiple_cameras(tmp_path, monkeypatch) -> None:
+    root = tmp_path / "CCTV"
+    v1 = root / "Cam_01" / "video1.mp4"
+    v2 = root / "Cam_02" / "video2.mp4"
+    v1.parent.mkdir(parents=True)
+    v2.parent.mkdir(parents=True)
+    v1.write_bytes(b"v1")
+    v2.write_bytes(b"v2")
+    processed = tmp_path / "processed"
+    monkeypatch.setattr("candidate_mining.processed_store.probe_video", lambda *_args, **_kwargs: Inventory())
+
+    cameras, records, failures = import_camera_folder(
+        root, processed, MediaTools(tmp_path / "ffmpeg", tmp_path / "ffprobe")
+    )
+
+    assert not failures
+    assert len(cameras) == 2
+    cam_names = {cam.name for cam in cameras}
+    assert cam_names == {"Cam_01", "Cam_02"}

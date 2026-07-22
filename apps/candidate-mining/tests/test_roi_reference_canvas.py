@@ -65,3 +65,23 @@ def test_roi_canvas_ignores_pointer_events_in_letterbox_margin(qtbot, tmp_path) 
     QTest.mouseRelease(canvas, Qt.LeftButton, pos=QPoint(100, 20))
 
     assert canvas.roi is None
+
+
+def test_flip_roi_flips_tracking_partition(qtbot, tmp_path) -> None:
+    canvas = RoiReferenceCanvas()
+    canvas.resize(200, 200)
+    qtbot.addWidget(canvas)
+    canvas.load_reference(tmp_path / "source.avi", _frame(), None)
+    canvas.show()
+    qtbot.waitExposed(canvas)
+
+    canvas.set_drawing(True)
+    QTest.mousePress(canvas, Qt.LeftButton, pos=QPoint(20, 80))
+    QTest.mouseMove(canvas, QPoint(100, 90))
+    QTest.mouseRelease(canvas, Qt.LeftButton, pos=QPoint(180, 80))
+
+    initial_region = canvas.roi.tracking_region_normalized
+    canvas.flip_roi()
+    flipped_region = canvas.roi.tracking_region_normalized
+
+    assert initial_region != flipped_region

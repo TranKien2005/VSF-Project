@@ -11,7 +11,7 @@ from .inventory import sha256_file
 from .models import Segment
 from .tracking import TrackObservation
 
-SCHEMA_VERSION = "person-detections.v1"
+SCHEMA_VERSION = "person-detections.v2"
 
 
 def source_basename(video_path: Path) -> str:
@@ -42,6 +42,9 @@ class StoredDetection:
     confidence: float
     track_id: int
     episode_id: str
+    initial_footpoint_xy_px: tuple[float, float]
+    initial_bbox_height_px: float
+    motion_confirmed: bool
 
 
 @dataclass(frozen=True)
@@ -105,6 +108,7 @@ class PersonDetectionStore:
             )
             for index, segment in enumerate(ordered, start=1)
         )
+        confirmed_episodes = {obs.episode_id for obs in observations if obs.motion_confirmed}
         return cls(
             source_filename=video_path.name,
             source_path=str(video_path.resolve()),
@@ -123,6 +127,9 @@ class PersonDetectionStore:
                     item.detection.confidence,
                     item.track_id,
                     item.episode_id,
+                    item.initial_footpoint_xy,
+                    item.initial_bbox_height_px,
+                    item.motion_confirmed or (item.episode_id in confirmed_episodes),
                 )
                 for item in observations
             ),
@@ -163,28 +170,43 @@ def write_person_detection_store(
     return target
 
 
+def _read_stored_detection(raw: object) -> StoredDetection:
+    if not isinstance(raw, dict):
+        raise ValueError("Detection must be an object")
+    bbox = tuple(float(value) for value in raw["bbox_xyxy_px"])
+    if len(bbox) != 4:
+        raise ValueError("Detection bbox must have four coordinates")
+    initial_footpoint = raw.get("initial_footpoint_xy_px")
+    if initial_footpoint is None:
+        initial_footpoint = ((bbox[0] + bbox[2]) / 2, bbox[3])
+    footpoint = tuple(float(value) for value in initial_footpoint)
+    if len(footpoint) != 2:
+        raise ValueError("Detection initial footpoint must have two coordinates")
+    return StoredDetection(
+        source_frame_index=int(raw["source_frame_index"]),
+        timestamp_sec=float(raw["timestamp_sec"]),
+        bbox_xyxy_px=bbox,
+        confidence=float(raw["confidence"]),
+        track_id=int(raw["track_id"]),
+        episode_id=str(raw["episode_id"]),
+        initial_footpoint_xy_px=footpoint,
+        initial_bbox_height_px=float(raw.get("initial_bbox_height_px", bbox[3] - bbox[1])),
+        motion_confirmed=bool(raw.get("motion_confirmed", True)),
+    )
+
+
 def read_person_detection_store(path: Path, video_path: Path) -> PersonDetectionStore:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError as error:
         raise FileNotFoundError(f"Person detection JSON is missing: {path}. Run candidate-mining first.") from error
-    if raw.get("schema_version") != SCHEMA_VERSION:
+    if raw.get("schema_version") not in {"person-detections.v1", SCHEMA_VERSION}:
         raise ValueError(f"Unsupported person detection JSON schema: {path}")
     try:
         source = raw["source"]
         if source["filename"] != video_path.name or source["sha256"] != sha256_file(video_path):
             raise ValueError("Person detection JSON does not match the selected raw video; rerun candidate-mining.")
-        detections = tuple(
-            StoredDetection(
-                int(item["source_frame_index"]),
-                float(item["timestamp_sec"]),
-                tuple(float(value) for value in item["bbox_xyxy_px"]),
-                float(item["confidence"]),
-                int(item["track_id"]),
-                str(item["episode_id"]),
-            )
-            for item in raw["detections"]
-        )
+        detections = tuple(_read_stored_detection(item) for item in raw["detections"])
         spans = tuple(
             StoredPresenceSegment(
                 span_id=str(item.get("span_id", f"person_detected-{index:04d}")),

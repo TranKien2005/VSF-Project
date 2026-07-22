@@ -45,7 +45,10 @@ class RtdetrPersonProvider:
         from ultralytics import RTDETR
 
         self._device = self._resolve_device()
-        self._model = RTDETR(str(self.weights_path.resolve()))
+        model = RTDETR(str(self.weights_path.resolve()))
+        if hasattr(model, "to") and self._device != "cpu":
+            model.to(self._device)
+        self._model = model
 
     def detect_batch(self, frames: list[SampledFrame]) -> list[list[PersonDetection]]:
         if not frames:
@@ -58,7 +61,7 @@ class RtdetrPersonProvider:
             iou=self.settings.iou_threshold,
             imgsz=self.settings.image_size,
             device=self._device,
-            quantize=16 if self.settings.half_precision and self._device != "cpu" else None,
+            half=bool(self.settings.half_precision and self._device != "cpu"),
             verbose=False,
         )
         output: list[list[PersonDetection]] = []

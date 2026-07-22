@@ -21,9 +21,6 @@ class PathsConfig:
 class ProviderConfig:
     person_yolo: dict[str, object]
     person_rtdetr: dict[str, object]
-    cover_heuristic: dict[str, object]
-    camera_movement: dict[str, object]
-    anomaly: dict[str, object]
     yolo11n_weights: Path
     rtdetr_l_weights: Path
 
@@ -80,9 +77,6 @@ def load_config(config_path: Path | None = None) -> AppConfig:
     providers = ProviderConfig(
         person_yolo=providers_raw["person_yolo"],
         person_rtdetr=providers_raw["person_rtdetr"],
-        cover_heuristic=providers_raw["cover_heuristic"],
-        camera_movement=providers_raw["camera_movement"],
-        anomaly=providers_raw["anomaly"],
         yolo11n_weights=_under_root(root, raw["models"]["yolo11n_weights"]),
         rtdetr_l_weights=_under_root(root, raw["models"]["rtdetr_l_weights"]),
     )

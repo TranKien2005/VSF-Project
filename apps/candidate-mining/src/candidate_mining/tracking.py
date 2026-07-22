@@ -21,6 +21,9 @@ class TrackObservation:
     episode_id: str
     reconciliation_status: str
     detection: PersonDetection
+    initial_footpoint_xy: tuple[float, float]
+    initial_bbox_height_px: float
+    motion_confirmed: bool
 
 
 @dataclass
@@ -29,6 +32,9 @@ class _ActiveTrack:
     episode_id: str
     last_timestamp_sec: float
     last_bbox_xyxy: tuple[float, float, float, float]
+    initial_footpoint_xy: tuple[float, float]
+    initial_bbox_height_px: float
+    motion_confirmed: bool
 
 
 def _iou(left: tuple[float, float, float, float], right: tuple[float, float, float, float]) -> float:
@@ -50,6 +56,14 @@ def _center_distance(left: tuple[float, float, float, float], right: tuple[float
     return math.dist(left_center, right_center)
 
 
+def _footpoint(bbox_xyxy: tuple[float, float, float, float]) -> tuple[float, float]:
+    return (bbox_xyxy[0] + bbox_xyxy[2]) / 2, bbox_xyxy[3]
+
+
+def _bbox_height(bbox_xyxy: tuple[float, float, float, float]) -> float:
+    return max(0.0, bbox_xyxy[3] - bbox_xyxy[1])
+
+
 class PersonEpisodeTracker:
     """Track bbox continuity in one source; IDs have no identity/business semantics."""
 
@@ -58,11 +72,16 @@ class PersonEpisodeTracker:
         gap_seconds: float = 8.0,
         iou_threshold: float = 0.15,
         center_distance_ratio: float = 0.20,
+        movement_threshold_ratio: float = 0.20,
     ) -> None:
+        if movement_threshold_ratio <= 0:
+            raise ValueError("Movement threshold ratio must be positive")
         self.gap_seconds = gap_seconds
         self.iou_threshold = iou_threshold
         self.center_distance_ratio = center_distance_ratio
+        self.movement_threshold_ratio = movement_threshold_ratio
         self._active: dict[int, _ActiveTrack] = {}
+        self._confirmed_episodes: set[str] = set()
         self._next_track_id = 1
         self._next_episode_number = 1
 
@@ -93,14 +112,45 @@ class PersonEpisodeTracker:
                 status = "continuous" if timestamp_sec == track.last_timestamp_sec else "reassociated_id_change"
                 episode_id = track.episode_id
                 unmatched_tracks.remove(track_id)
+                initial_footpoint_xy = track.initial_footpoint_xy
+                initial_bbox_height_px = track.initial_bbox_height_px
+                motion_confirmed = track.motion_confirmed or (episode_id in self._confirmed_episodes)
             else:
                 track_id = self._next_track_id
                 self._next_track_id += 1
                 episode_id = f"episode_{self._next_episode_number:06d}"
                 self._next_episode_number += 1
                 status = "new_episode"
-            self._active[track_id] = _ActiveTrack(track_id, episode_id, timestamp_sec, detection.bbox_xyxy)
-            observations.append(TrackObservation(timestamp_sec, track_id, episode_id, status, detection))
+                initial_footpoint_xy = _footpoint(detection.bbox_xyxy)
+                initial_bbox_height_px = _bbox_height(detection.bbox_xyxy)
+                motion_confirmed = episode_id in self._confirmed_episodes
+            if not motion_confirmed:
+                displacement_px = math.dist(_footpoint(detection.bbox_xyxy), initial_footpoint_xy)
+                movement_ratio = displacement_px / max(initial_bbox_height_px, 1.0)
+                motion_confirmed = movement_ratio >= self.movement_threshold_ratio
+            if motion_confirmed:
+                self._confirmed_episodes.add(episode_id)
+            self._active[track_id] = _ActiveTrack(
+                track_id,
+                episode_id,
+                timestamp_sec,
+                detection.bbox_xyxy,
+                initial_footpoint_xy,
+                initial_bbox_height_px,
+                motion_confirmed,
+            )
+            observations.append(
+                TrackObservation(
+                    timestamp_sec,
+                    track_id,
+                    episode_id,
+                    status,
+                    detection,
+                    initial_footpoint_xy,
+                    initial_bbox_height_px,
+                    motion_confirmed,
+                )
+            )
         self._active = {
             track_id: track
             for track_id, track in self._active.items()

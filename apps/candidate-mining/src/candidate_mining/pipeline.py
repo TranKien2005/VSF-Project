@@ -27,6 +27,7 @@ def run_pipeline(
     on_progress: Callable[[ProcessingProgress], None] | None = None,
     is_cancelled: Callable[[], bool] | None = None,
     batch_size_override: int | None = None,
+    sample_fps_override: float | None = None,
 ) -> list[Path]:
     """Detect full-frame people, then publish only ROI-filtered person_detected candidates."""
     record = _registered_source(video_path, config)
@@ -41,7 +42,12 @@ def run_pipeline(
         on_progress=on_progress,
         is_cancelled=is_cancelled,
         batch_size_override=batch_size_override,
+        sample_fps_override=sample_fps_override,
     )
+    if is_cancelled and is_cancelled():
+        from .automatic_signals import ProcessingCancelled
+
+        raise ProcessingCancelled("Processing cancelled before writing candidate results")
     if frame_size is None:
         raise RuntimeError(f"No readable frames were found in source video: {source}")
     width, height = frame_size
@@ -82,6 +88,7 @@ def run_pipeline(
         pre_roll_seconds=config.pipeline.pre_roll_seconds,
         post_roll_seconds=config.pipeline.post_roll_seconds,
         roi_scope=roi_scope,
+        signals=signals,
     )
 
 

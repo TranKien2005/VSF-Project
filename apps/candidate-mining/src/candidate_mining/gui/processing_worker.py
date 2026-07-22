@@ -19,13 +19,14 @@ class ProcessingWorker(QObject):
     cancelled = Signal()
     finished = Signal()
 
-    def __init__(self, source, config, batch_size: int) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, source, config, batch_size: int, sample_fps: float | None = None) -> None:  # type: ignore[no-untyped-def]
         super().__init__()
         if batch_size <= 0:
             raise ValueError("Inference batch size must be positive")
         self.source = source
         self.config = config
         self.batch_size = batch_size
+        self.sample_fps = sample_fps
         self._cancel = Event()
 
     def request_cancel(self) -> None:
@@ -40,6 +41,7 @@ class ProcessingWorker(QObject):
                 on_progress=self.progress.emit,
                 is_cancelled=self._cancel.is_set,
                 batch_size_override=self.batch_size,
+                sample_fps_override=self.sample_fps,
             )
         except ProcessingCancelled:
             self.cancelled.emit()

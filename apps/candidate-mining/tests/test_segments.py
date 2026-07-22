@@ -20,14 +20,14 @@ def test_consolidates_overlapping_categories_into_one_sample() -> None:
     signals = [
         Signal(10.0, "person_detected", person_count=1),
         Signal(14.0, "person_detected", person_count=2),
-        Signal(13.0, "camera_cover", brightness_score=0.8),
+        Signal(13.0, "camera_anomaly", brightness_score=0.8),
     ]
 
     merged = merge_signals(signals, merge_gap_seconds=5.0)
     consolidated = consolidate_segments(merged)
 
     assert len(consolidated) == 1
-    assert consolidated[0].categories == {"person_detected", "camera_cover"}
+    assert consolidated[0].categories == {"person_detected", "camera_anomaly"}
     assert consolidated[0].start_sec == 10.0
     assert consolidated[0].end_sec == 14.0
     assert consolidated[0].person_count_max == 2

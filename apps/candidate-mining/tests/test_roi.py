@@ -36,3 +36,20 @@ def test_curved_stroke_round_trip_and_footpoint_membership() -> None:
 def test_invalid_stroke_is_rejected(points) -> None:
     with pytest.raises(ValueError):
         derive_track_region(points)
+
+
+def test_middle_stroke_with_endpoint_jitter_derives_clean_partition() -> None:
+    stroke = (
+        (0.2, 0.5),
+        (0.3, 0.5),
+        (0.4, 0.5),
+        (0.5, 0.5),
+        (0.6, 0.5),
+        (0.7, 0.5),
+        (0.8, 0.5),
+        (0.78, 0.52),
+        (0.76, 0.54),
+    )
+    region = derive_track_region(stroke)
+    assert len(region.tracking_region) >= 5
+    assert point_in_polygon((0.5, 0.52), region.tracking_region)

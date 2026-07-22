@@ -12,9 +12,7 @@ from .config import AppConfig
 from .frame_sampling import sample_video_frames
 from .models import Signal
 from .processing_progress import ProcessingProgress, estimate_eta, estimated_sample_count
-from .providers.anomaly import AnomalyProvider, AnomalySettings
-from .providers.camera_movement import CameraMovementProvider, MovementSettings
-from .providers.cover_heuristic import CoverHeuristicProvider, CoverSettings
+from .providers.camera_anomaly import CameraAnomalyProvider
 from .providers.person_rtdetr import PersonRtdetrSettings, RtdetrPersonProvider
 from .providers.person_yolo import PersonYoloSettings, YoloPersonProvider
 from .tracking import PersonEpisodeTracker, TrackObservation
@@ -62,6 +60,19 @@ def _expected_samples(video_path: Path, sample_fps: float) -> int | None:
         capture.release()
 
 
+def _resolve_device_name(person: object | None) -> str:
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            return f"GPU 0 ({torch.cuda.get_device_name(0)})"
+    except (ImportError, RuntimeError):
+        pass
+    if person and getattr(person, "selected_device", None):
+        return str(person.selected_device)
+    return "CPU"
+
+
 def generate_automatic_signals(
     video_path: Path,
     config: AppConfig,
@@ -69,15 +80,19 @@ def generate_automatic_signals(
     on_progress: Callable[[ProcessingProgress], None] | None = None,
     is_cancelled: Callable[[], bool] | None = None,
     batch_size_override: int | None = None,
+    sample_fps_override: float | None = None,
 ) -> tuple[list[Signal], list[TrackObservation], tuple[int, int] | None]:
     """Generate signals while reporting only frames that completed processing."""
     os.environ.setdefault("TORCH_HOME", str(config.paths.torch_cache_dir))
+    effective_sample_fps = (
+        sample_fps_override if sample_fps_override is not None and sample_fps_override > 0 else config.pipeline.sample_fps
+    )
     person_name, person_raw = _person_provider_config(config)
     configured_batch_size = int(person_raw.get("batch_size", 1))
     batch_size = batch_size_override if batch_size_override is not None else configured_batch_size
     if not isinstance(batch_size, int) or batch_size <= 0:
         raise ValueError("Person provider batch size must be a positive integer")
-    total_samples = _expected_samples(video_path, config.pipeline.sample_fps)
+    total_samples = _expected_samples(video_path, effective_sample_fps)
     started_at = time.monotonic()
     completed = 0
     latest_timestamp: float | None = None
@@ -100,18 +115,13 @@ def generate_automatic_signals(
                 eta_seconds=estimate_eta(elapsed, completed, total_samples),
                 configured_batch_size=batch_size,
                 effective_batch_size=batch_size,
-                device=str(person.selected_device) if person else "disabled",
+                device=_resolve_device_name(person),
                 message=message,
             )
         )
 
     report("preparing", "Preparing source and providers")
-    cover_raw = config.providers.cover_heuristic
-    movement_raw = config.providers.camera_movement
-    anomaly_raw = config.providers.anomaly
-    anomaly = AnomalyProvider(_settings(AnomalySettings, anomaly_raw)) if anomaly_raw["enabled"] else None
-    cover = CoverHeuristicProvider(_settings(CoverSettings, cover_raw)) if cover_raw["enabled"] else None
-    movement = CameraMovementProvider(_settings(MovementSettings, movement_raw)) if movement_raw["enabled"] else None
+    camera_anomaly_provider = CameraAnomalyProvider()
     person_optional = bool(person_raw.get("optional", False))
     try:
         if person_name == "rtdetr-l":
@@ -129,7 +139,10 @@ def generate_automatic_signals(
     observations: list[TrackObservation] = []
     frame_size: tuple[int, int] | None = None
     pending_person_frames = []
-    tracker = PersonEpisodeTracker(gap_seconds=float(person_raw.get("person_episode_gap_seconds", 8.0)))
+    tracker = PersonEpisodeTracker(
+        gap_seconds=float(person_raw.get("person_episode_gap_seconds", 8.0)),
+        movement_threshold_ratio=float(person_raw.get("movement_threshold_ratio", 0.5)),
+    )
 
     def process_person_batch() -> None:
         nonlocal completed, frame_size, latest_timestamp, pending_person_frames
@@ -140,42 +153,38 @@ def generate_automatic_signals(
         frames = pending_person_frames
         detections_by_frame = person.detect_batch(frames)
         for frame, detections in zip(frames, detections_by_frame, strict=True):
-            if anomaly:
-                signals.extend(anomaly.process(frame, has_accepted_person=bool(detections)))
+            if cancelled():
+                raise ProcessingCancelled("Processing cancelled during batch evaluation")
+
             height, width = frame.bgr.shape[:2]
             frame_size = (width, height)
             diagonal = (height**2 + width**2) ** 0.5
             frame_observations = tracker.update(frame.timestamp_sec, detections, diagonal)
             observations.extend(frame_observations)
             for observation in frame_observations:
-                signals.append(
-                    Signal(
-                        timestamp_sec=observation.timestamp_sec,
-                        category="person_detected",
-                        person_count=1,
-                        track_ids=(observation.track_id,),
-                        episode_ids=(observation.episode_id,),
-                        track_reconciliation_status=observation.reconciliation_status,
+                if observation.motion_confirmed:
+                    signals.append(
+                        Signal(
+                            timestamp_sec=observation.timestamp_sec,
+                            category="person_detected",
+                            person_count=1,
+                            track_ids=(observation.track_id,),
+                            episode_ids=(observation.episode_id,),
+                            track_reconciliation_status=observation.reconciliation_status,
+                        )
                     )
-                )
             completed += 1
             latest_timestamp = frame.timestamp_sec
         pending_person_frames = []
         report("detecting", "Detecting and tracking person evidence")
 
-    for frame in sample_video_frames(video_path, config.pipeline.sample_fps):
+    for frame in sample_video_frames(video_path, effective_sample_fps):
         if cancelled():
             raise ProcessingCancelled("Processing cancelled during source decoding")
-        if cover:
-            signal = cover.process(frame)
-            if signal:
-                signals.append(signal)
-        if movement:
-            signal = movement.process(frame)
-            if signal:
-                signals.append(signal)
-        if anomaly and not person:
-            signals.extend(anomaly.process(frame, has_accepted_person=False))
+        if camera_anomaly_provider:
+            sig = camera_anomaly_provider.process(frame)
+            if sig:
+                signals.append(sig)
         if person:
             pending_person_frames.append(frame)
             if len(pending_person_frames) >= batch_size:

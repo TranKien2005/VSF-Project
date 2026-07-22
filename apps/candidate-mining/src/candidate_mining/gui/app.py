@@ -5,9 +5,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRectF, Qt, QUrl, Signal
+from PySide6.QtCore import QBuffer, QByteArray, QPointF, QRectF, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QImage, QPainter, QPen
-from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QVideoSink
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QVideoFrame, QVideoSink
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..debug_renderer import held_detections
+from ..debug_renderer import held_detections_by_time
 from ..roi import TrackRoi, normalized_to_pixel
 from .theme import APP_STYLESHEET
 
@@ -39,6 +39,7 @@ class VideoOverlay(QWidget):
         self.source_width = 0
         self.source_height = 0
         self.frame_index = 0
+        self.current_sec = 0.0
         self.roi: TrackRoi | None = None
         self.store = None
         self.show_boxes = True
@@ -50,13 +51,14 @@ class VideoOverlay(QWidget):
         source_width: int,
         source_height: int,
         frame_index: int,
+        current_sec: float = 0.0,
         roi: TrackRoi | None,
         store,
         show_boxes: bool,
         show_roi: bool,
     ) -> None:  # type: ignore[no-untyped-def]
         self.source_width, self.source_height = source_width, source_height
-        self.frame_index, self.roi, self.store = frame_index, roi, store
+        self.frame_index, self.current_sec, self.roi, self.store = frame_index, current_sec, roi, store
         self.show_boxes, self.show_roi = show_boxes, show_roi
         self.update()
 
@@ -71,9 +73,10 @@ class VideoOverlay(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         if self.show_roi and self.roi:
             points = [self._map_normalized(point, scale, offset_x, offset_y) for point in self.roi.tracking_region_normalized]
-            painter.setPen(QPen(QColor("#ffb000"), 3))
+            painter.setPen(Qt.NoPen)
             painter.setBrush(QColor(255, 176, 0, 55))
             painter.drawPolygon(points)
+            painter.setPen(QPen(QColor("#ffb000"), 3))
             painter.setBrush(Qt.NoBrush)
             stroke = [self._map_normalized(point, scale, offset_x, offset_y) for point in self.roi.stroke_points_normalized]
             start = self._map_normalized(self.roi.start_extension_normalized, scale, offset_x, offset_y)
@@ -83,16 +86,15 @@ class VideoOverlay(QWidget):
                 painter.drawLine(first, second)
             painter.drawLine(stroke[-1], end)
         if self.show_boxes and self.store:
-            snapshots: dict[int, list] = {}
-            for detection in self.store.detections:
-                snapshots.setdefault(detection.source_frame_index, []).append(detection)
-            painter.setPen(QPen(QColor("#00dc00"), 2))
-            for detection in held_detections(snapshots, sorted(snapshots), self.frame_index):
+            for detection in held_detections_by_time(self.store.detections, self.current_sec):
+                color = QColor("#00dc00") if detection.motion_confirmed else QColor("#ffb000")
+                label = "person" if detection.motion_confirmed else "suspect"
+                painter.setPen(QPen(color, 2))
                 x1, y1, x2, y2 = detection.bbox_xyxy_px
                 top_left = self._map_pixel(x1, y1, scale, offset_x, offset_y)
                 bottom_right = self._map_pixel(x2, y2, scale, offset_x, offset_y)
                 painter.drawRect(top_left.x(), top_left.y(), bottom_right.x() - top_left.x(), bottom_right.y() - top_left.y())
-                painter.drawText(top_left.x(), max(16, top_left.y() - 4), f"person {detection.confidence:.2f}")
+                painter.drawText(top_left.x(), max(16, top_left.y() - 4), f"{label} {detection.confidence:.2f}")
         if self.draft_stroke:
             painter.setPen(QPen(QColor("#3a86ff"), 3, Qt.DashLine))
             points = [self._map_normalized(point, scale, offset_x, offset_y) for point in self.draft_stroke]
@@ -154,6 +156,7 @@ class VideoFrameCanvas(QWidget):
         self.source_width = 0
         self.source_height = 0
         self.frame_index = 0
+        self.current_sec = 0.0
         self.roi: TrackRoi | None = None
         self.store = None
         self.show_boxes = True
@@ -166,19 +169,31 @@ class VideoFrameCanvas(QWidget):
             self._image = image
             self.update()
 
+    def set_bgr_frame(self, bgr) -> None:  # type: ignore[no-untyped-def]
+        import cv2
+
+        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        h, w, ch = rgb.shape
+        bytes_per_line = ch * w
+        image = QImage(rgb.data, w, h, bytes_per_line, QImage.Format_RGB888).copy()
+        self.source_width, self.source_height = w, h
+        self._image = image
+        self.update()
+
     def update_state(
         self,
         *,
         source_width: int,
         source_height: int,
         frame_index: int,
+        current_sec: float = 0.0,
         roi: TrackRoi | None,
         store,
         show_boxes: bool,
         show_roi: bool,
     ) -> None:  # type: ignore[no-untyped-def]
         self.source_width, self.source_height = source_width, source_height
-        self.frame_index, self.roi, self.store = frame_index, roi, store
+        self.frame_index, self.current_sec, self.roi, self.store = frame_index, current_sec, roi, store
         self.show_boxes, self.show_roi = show_boxes, show_roi
         self.update()
 
@@ -204,16 +219,15 @@ class VideoFrameCanvas(QWidget):
                 painter.drawLine(first, second)
             painter.drawLine(stroke[-1], self._map_normalized(self.roi.end_extension_normalized, scale, offset_x, offset_y))
         if self.show_boxes and self.store:
-            snapshots: dict[int, list] = {}
-            for detection in self.store.detections:
-                snapshots.setdefault(detection.source_frame_index, []).append(detection)
-            painter.setPen(QPen(QColor("#00dc00"), 2))
-            for detection in held_detections(snapshots, sorted(snapshots), self.frame_index):
+            for detection in held_detections_by_time(self.store.detections, self.current_sec):
+                color = QColor("#00dc00") if detection.motion_confirmed else QColor("#ffb000")
+                label = "person" if detection.motion_confirmed else "suspect"
+                painter.setPen(QPen(color, 2))
                 x1, y1, x2, y2 = detection.bbox_xyxy_px
                 top_left = self._map_pixel(x1, y1, scale, offset_x, offset_y)
                 bottom_right = self._map_pixel(x2, y2, scale, offset_x, offset_y)
                 painter.drawRect(top_left.x(), top_left.y(), bottom_right.x() - top_left.x(), bottom_right.y() - top_left.y())
-                painter.drawText(top_left.x(), max(16, top_left.y() - 4), f"person {detection.confidence:.2f}")
+                painter.drawText(top_left.x(), max(16, top_left.y() - 4), f"{label} {detection.confidence:.2f}")
 
     def _map_normalized(self, point: tuple[float, float], scale: float, offset_x: float, offset_y: float) -> QPointF:
         return self._map_pixel(*normalized_to_pixel(point, self.source_width, self.source_height), scale, offset_x, offset_y)
@@ -274,6 +288,11 @@ class RoiReferenceCanvas(QWidget):
         self.roi = roi
         self._draft_stroke = ()
         self.update()
+
+    def flip_roi(self) -> None:
+        if self.roi:
+            self.set_roi(self.roi.flip_partition())
+            self.roi_changed.emit()
 
     def clear_roi(self) -> None:
         self.roi = None
@@ -374,9 +393,10 @@ class RoiReferenceCanvas(QWidget):
 
     def _draw_roi(self, painter: QPainter, roi: TrackRoi) -> None:
         region = [self._normalized_to_display(point) for point in roi.tracking_region_normalized]
-        painter.setPen(QPen(QColor("#ffb000"), 3))
+        painter.setPen(Qt.NoPen)
         painter.setBrush(QColor(255, 176, 0, 55))
         painter.drawPolygon(region)
+        painter.setPen(QPen(QColor("#ffb000"), 3))
         painter.setBrush(Qt.NoBrush)
         stroke = [self._normalized_to_display(point) for point in roi.stroke_points_normalized]
         start = self._normalized_to_display(roi.start_extension_normalized)
@@ -385,6 +405,117 @@ class RoiReferenceCanvas(QWidget):
         for first, second in zip(stroke, stroke[1:]):
             painter.drawLine(first, second)
         painter.drawLine(stroke[-1], end)
+
+
+class TimelineSlider(QSlider):
+    """Custom seek slider with integrated subvideo region highlight and START/END markers."""
+
+    def __init__(self, orientation: Qt.Orientation = Qt.Horizontal, parent: QWidget | None = None) -> None:
+        super().__init__(orientation, parent)
+        self.context_start_ms: int | None = None
+        self.context_end_ms: int | None = None
+        self.duration_ms = 0
+        self.source_fps = 25.0
+        self.setObjectName("timelineSlider")
+        self.setFixedHeight(40)
+
+    @property
+    def has_context(self) -> bool:
+        return self.context_start_ms is not None and self.context_end_ms is not None
+
+    def set_context(
+        self,
+        start_ms: int | None,
+        end_ms: int | None,
+        duration_ms: int,
+        source_fps: float = 25.0,
+    ) -> None:
+        self.context_start_ms = max(0, int(start_ms)) if start_ms is not None else None
+        self.context_end_ms = max(self.context_start_ms or 0, int(end_ms)) if end_ms is not None else None
+        self.duration_ms = max(0, int(duration_ms))
+        self.source_fps = max(1.0, float(source_fps))
+        self.updateGeometry()
+        self.update()
+        self.repaint()
+
+    def _scale_duration_ms(self) -> int:
+        return max(self.duration_ms, self.maximum(), self.context_end_ms or 0, 1)
+
+    def marker_x_positions(self) -> tuple[int, int] | None:
+        if not self.has_context:
+            return None
+        left, right = 2, max(2, self.width() - 2)
+        duration = self._scale_duration_ms()
+
+        def x_at(val: int) -> int:
+            ratio = min(1.0, max(0.0, val / duration))
+            return left + round(ratio * (right - left))
+
+        return x_at(self.context_start_ms or 0), x_at(self.context_end_ms or 0)
+
+    def paintEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        super().paintEvent(event)
+        if not self.has_context:
+            return
+        positions = self.marker_x_positions()
+        if positions is None:
+            return
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        start_x, end_x = positions
+        start_ms = self.context_start_ms or 0
+        end_ms = self.context_end_ms or 0
+
+        start_frame = int(round(start_ms / 1000.0 * self.source_fps))
+        end_frame = int(round(end_ms / 1000.0 * self.source_fps))
+
+        rect_x = min(start_x, end_x)
+        rect_w = max(4, abs(end_x - start_x))
+
+        groove_y = (self.height() // 2) - 4
+        groove_h = 8
+
+        # Translucent subvideo highlight bar directly over the slider groove
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(255, 77, 79, 75))
+        painter.drawRect(rect_x, groove_y - 2, rect_w, groove_h + 4)
+
+        # Top border accent for active region
+        painter.setBrush(QColor("#ff4d4f"))
+        painter.drawRect(rect_x, groove_y - 2, rect_w, 2)
+
+        # Vertical marker lines
+        painter.setPen(QPen(QColor("#ff4d4f"), 2))
+        painter.drawLine(start_x, 2, start_x, self.height() - 2)
+        painter.drawLine(end_x, 2, end_x, self.height() - 2)
+
+        # Pin heads
+        painter.setBrush(QColor("#ff4d4f"))
+        painter.drawEllipse(start_x - 4, 1, 8, 8)
+        painter.drawEllipse(end_x - 4, 1, 8, 8)
+
+        # Labels
+        start_sec_str = f"{start_ms / 1000.0:.1f}s"
+        end_sec_str = f"{end_ms / 1000.0:.1f}s"
+        start_label = f"START {start_sec_str} (F{start_frame})"
+        end_label = f"END {end_sec_str} (F{end_frame})"
+
+        font = painter.font()
+        font.setPointSize(8)
+        painter.setFont(font)
+
+        painter.setPen(QColor("#ffffff"))
+        painter.drawText(max(4, start_x - 2), 12, start_label)
+        end_advance = painter.fontMetrics().horizontalAdvance(end_label)
+        painter.drawText(max(4, min(self.width() - end_advance - 4, end_x - end_advance + 2)), 12, end_label)
+
+        painter.end()
+
+
+# Alias for backwards compatibility with tests
+ContextMarkerBar = TimelineSlider
 
 
 class VideoWorkspace(QWidget):
@@ -405,12 +536,15 @@ class VideoWorkspace(QWidget):
         self._pending_start_ms: int | None = None
         self._context_start_ms: int | None = None
         self._context_end_ms: int | None = None
+        self._playback_is_bounded = False
+        self._should_autoplay_context = False
+        self._is_user_seeking = False
         self.audio = QAudioOutput(self)
         self.player = QMediaPlayer(self)
         self.player.setAudioOutput(self.audio)
         self.video_sink = QVideoSink(self)
         self.video = VideoFrameCanvas()
-        self.video_sink.videoFrameChanged.connect(self.video.set_video_frame)
+        self.video_sink.videoFrameChanged.connect(self._on_video_frame_changed)
         self.player.setVideoOutput(self.video_sink)
         self.overlay = VideoOverlay()
         self.overlay.stroke_finished.connect(self._finish_stroke)
@@ -436,12 +570,15 @@ class VideoWorkspace(QWidget):
         back.clicked.connect(lambda: self._seek_relative(-5_000))
         forward = QPushButton("+5 s")
         forward.clicked.connect(lambda: self._seek_relative(5_000))
-        self.timeline = QSlider(Qt.Horizontal)
-        self.timeline.sliderReleased.connect(lambda: self._set_bounded_position(self.timeline.value()))
-        for widget in (self.play, previous, following, back, forward, self.timeline):
+        self.timeline = TimelineSlider(Qt.Horizontal)
+        self.timeline.sliderPressed.connect(self._timeline_slider_pressed)
+        self.timeline.sliderMoved.connect(self._timeline_slider_moved)
+        self.timeline.sliderReleased.connect(self._timeline_slider_released)
+        for widget in (self.play, previous, following, back, forward):
             controls.addWidget(widget)
         layout.addLayout(controls)
-        self.info = QLabel("No source loaded", objectName="subtitle")
+        layout.addWidget(self.timeline)
+        self.info = QLabel("00:00.0 / 00:00.0 · no source loaded", objectName="subtitle")
         layout.addWidget(self.info)
         switches = QHBoxLayout()
         self.show_boxes = QCheckBox("Technical boxes")
@@ -463,6 +600,18 @@ class VideoWorkspace(QWidget):
         switches.addStretch()
         layout.addLayout(switches)
 
+    def _timeline_slider_pressed(self) -> None:
+        self._is_user_seeking = True
+
+    def _timeline_slider_moved(self, value: int) -> None:
+        self._update_timeline_info(value)
+        frame_index = int(value / 1000 * self.source_fps)
+        self._refresh_overlay(frame_index)
+
+    def _timeline_slider_released(self) -> None:
+        self._is_user_seeking = False
+        self._set_bounded_position(self.timeline.value())
+
     def open_source(
         self, source: Path, *, store=None, roi: TrackRoi | None = None, initial_frame_index: int | None = None
     ) -> None:  # type: ignore[no-untyped-def]
@@ -472,15 +621,40 @@ class VideoWorkspace(QWidget):
         self.source_width = int(getattr(store, "frame_width", 0) or 1920)
         self.source_height = int(getattr(store, "frame_height", 0) or 1080)
         self.clear_review_context()
+
+        # Instant thumbnail rendering using FrameAccess (OpenCV)
+        try:
+            from ..frame_access import FrameAccess
+
+            access = FrameAccess(source)
+            try:
+                target_sec = (initial_frame_index / self.source_fps) if initial_frame_index else 0.0
+                thumb = access.read_at_time(target_sec)
+                self.video.set_bgr_frame(thumb.bgr)
+                self.source_width, self.source_height = thumb.width, thumb.height
+            finally:
+                access.close()
+        except Exception:
+            pass
+
         self._pending_start_ms = round(initial_frame_index / self.source_fps * 1000) if initial_frame_index else None
-        self.player.setSource(QUrl.fromLocalFile(str(source)))
-        self.info.setText(f"Loading native media: {source.name}")
+        # Load the entire file into RAM for instant seeking.
+        with open(source, "rb") as fh:
+            self._source_bytes = QByteArray(fh.read())
+        self._source_buffer = QBuffer(self._source_bytes)
+        self._source_buffer.open(QBuffer.OpenModeFlag.ReadOnly)
+        self.player.setSourceDevice(self._source_buffer, QUrl.fromLocalFile(str(source)))
+        self.info.setText(f"Media loaded into RAM: {source.name} ({len(self._source_bytes) / 1048576:.1f} MB)")
         self._refresh_overlay()
 
     def close_source(self) -> int | None:
         frame_index = round(self.player.position() / 1000 * self.source_fps) if self.source_fps else None
         self.player.stop()
         self.player.setSource(QUrl())
+        if hasattr(self, "_source_buffer"):
+            self._source_buffer.close()
+            del self._source_buffer
+            del self._source_bytes
         self.source, self.store = None, None
         self.clear_review_context()
         return frame_index
@@ -492,6 +666,11 @@ class VideoWorkspace(QWidget):
     def set_roi(self, roi: TrackRoi | None) -> None:
         self.roi = roi
         self._refresh_overlay()
+
+    def flip_roi(self) -> None:
+        if self.roi:
+            self.set_roi(self.roi.flip_partition())
+            self.roi_changed.emit()
 
     def set_detection_store(self, store) -> None:  # type: ignore[no-untyped-def]
         self.store = store
@@ -509,6 +688,7 @@ class VideoWorkspace(QWidget):
         frame_height: int,
         start_sec: float,
         end_sec: float,
+        autoplay: bool = True,
     ) -> None:  # type: ignore[no-untyped-def]
         if start_sec < 0 or end_sec < start_sec:
             raise ValueError("Review context bounds are invalid")
@@ -527,16 +707,21 @@ class VideoWorkspace(QWidget):
         self._context_start_ms = round(start_sec * 1000)
         self._context_end_ms = round(end_sec * 1000)
         self._pending_start_ms = self._context_start_ms
+        self._should_autoplay_context = autoplay
         self._apply_context_bounds()
-        self.player.pause()
+        self._apply_context_marker()
+        self._update_timeline_info(self._context_start_ms)
         if self.player.mediaStatus() in {QMediaPlayer.LoadedMedia, QMediaPlayer.BufferedMedia}:
-            self._set_bounded_position(self._context_start_ms)
-            self._pending_start_ms = None
+            self._seek_to_context_start(autoplay=autoplay)
 
     def clear_review_context(self) -> None:
         self._context_start_ms = None
         self._context_end_ms = None
+        self._playback_is_bounded = False
+        self._should_autoplay_context = False
+        self._apply_context_marker()
         self.timeline.setRange(0, max(0, self.player.duration()))
+        self._update_timeline_info(self.player.position())
 
     def _context_bounds(self) -> tuple[int, int]:
         start = self._context_start_ms if self._context_start_ms is not None else 0
@@ -546,12 +731,29 @@ class VideoWorkspace(QWidget):
         return start, max(start, end)
 
     def _apply_context_bounds(self) -> None:
-        start, end = self._context_bounds()
-        self.timeline.setRange(start, end)
+        self.timeline.setRange(0, max(0, self.player.duration()))
+
+    def _apply_context_marker(self) -> None:
+        if self._context_start_ms is None or self._context_end_ms is None:
+            self.timeline.set_context(None, None, self.player.duration(), self.source_fps)
+            return
+        duration_ms = max(self.player.duration(), self._context_end_ms, 1)
+        self.timeline.set_context(self._context_start_ms, self._context_end_ms, duration_ms, self.source_fps)
 
     def _set_bounded_position(self, position_ms: int) -> None:
-        start, end = self._context_bounds()
-        self.player.setPosition(max(start, min(end, position_ms)))
+        self._playback_is_bounded = False
+        self.player.setPosition(max(0, min(max(0, self.player.duration()), position_ms)))
+
+    def _seek_to_context_start(self, autoplay: bool = True) -> None:
+        """Seek to context start.  Video data is fully in RAM so
+        ``setPosition()`` works reliably without pipeline resets."""
+        start, _ = self._context_bounds()
+        self._playback_is_bounded = False
+        self.player.pause()
+        self.player.setPosition(start)
+        self._playback_is_bounded = True
+        if autoplay:
+            QTimer.singleShot(150, self.player.play)
 
     def clear_roi(self) -> None:
         self.roi = None
@@ -584,30 +786,78 @@ class VideoWorkspace(QWidget):
         self._refresh_overlay()
 
     def _media_status_changed(self, status) -> None:  # type: ignore[no-untyped-def]
-        if status in {QMediaPlayer.LoadedMedia, QMediaPlayer.BufferedMedia} and self._pending_start_ms is not None:
-            self._set_bounded_position(self._pending_start_ms)
+        if self._pending_start_ms is None:
+            return
+        if status in {QMediaPlayer.LoadedMedia, QMediaPlayer.BufferedMedia}:
+            target_ms = self._pending_start_ms
+            autoplay = self._should_autoplay_context
             self._pending_start_ms = None
+            self.player.setPosition(target_ms)
+
+            def _after_load() -> None:
+                if self._context_start_ms is not None:
+                    self._playback_is_bounded = True
+                if autoplay:
+                    self.player.play()
+
+            QTimer.singleShot(150, _after_load)
 
     def _duration_changed(self, duration_ms: int) -> None:
         self._apply_context_bounds()
+        self._apply_context_marker()
+        self._update_timeline_info(self.player.position())
 
     def _position_changed(self, position_ms: int) -> None:
         start, end = self._context_bounds()
-        if self._context_end_ms is not None and position_ms >= end:
+        if self._playback_is_bounded and self._context_end_ms is not None and position_ms >= start and position_ms >= end:
             if position_ms != end:
                 self.player.setPosition(end)
             self.player.pause()
+            self._playback_is_bounded = False
             position_ms = end
-        elif self._context_start_ms is not None and position_ms < start:
-            self.player.setPosition(start)
-            position_ms = start
-        self.timeline.blockSignals(True)
-        self.timeline.setValue(position_ms)
-        self.timeline.blockSignals(False)
+        if not getattr(self, "_is_user_seeking", False):
+            self.timeline.blockSignals(True)
+            self.timeline.setValue(position_ms)
+            self.timeline.blockSignals(False)
+            self._update_timeline_info(position_ms)
         frame_index = int(position_ms / 1000 * self.source_fps)
-        context = "" if self._context_start_ms is None else f" · review {start / 1000:.3f}–{end / 1000:.3f}s"
-        self.info.setText(f"{position_ms / 1000:.3f}s · frame {frame_index} · native playback{context}")
         self._refresh_overlay(frame_index)
+
+    def _update_timeline_info(self, position_ms: int) -> None:
+        if not self.is_loaded:
+            self.info.setText("00:00.0 / 00:00.0 · no source loaded")
+            return
+        current_sec = position_ms / 1000.0
+        total_duration_ms = max(0, self.player.duration())
+        total_sec = total_duration_ms / 1000.0
+
+        current_frame = int(round(current_sec * self.source_fps))
+        total_frames = int(round(total_sec * self.source_fps)) if total_duration_ms > 0 else 0
+
+        time_info = f"{self._format_time(position_ms)} / {self._format_time(total_duration_ms)}"
+        frame_info = f" (Frame {current_frame} / {total_frames})" if total_frames > 0 else f" (Frame {current_frame})"
+        meta_info = f" · {self.source_fps:.1f} FPS · {self.source_width}x{self.source_height}"
+
+        context_info = ""
+        if self._context_start_ms is not None and self._context_end_ms is not None:
+            start_str = self._format_time(self._context_start_ms)
+            end_str = self._format_time(self._context_end_ms)
+            sub_len_sec = (self._context_end_ms - self._context_start_ms) / 1000.0
+            context_info = f" · [Subvideo: {start_str} – {end_str} ({sub_len_sec:.1f}s)]"
+
+        self.info.setText(f"{time_info}{frame_info}{meta_info}{context_info}")
+
+    @staticmethod
+    def _format_time(milliseconds: int, include_subsecond: bool = True) -> str:
+        total_ms = max(0, int(milliseconds))
+        total_seconds = total_ms // 1000
+        tenths = (total_ms % 1000) // 100
+        minutes, seconds = divmod(total_seconds, 60)
+        hours, minutes = divmod(minutes, 60)
+        time_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}" if hours else f"{minutes:02d}:{seconds:02d}"
+        if include_subsecond:
+            time_str += f".{tenths}"
+        return time_str
 
     def _playback_state_changed(self, state) -> None:  # type: ignore[no-untyped-def]
         self.play.setText("Pause" if state == QMediaPlayer.PlayingState else "Play")
@@ -617,7 +867,16 @@ class VideoWorkspace(QWidget):
             self.info.setText(f"Native playback error: {message}")
 
     def _toggle_play(self) -> None:
-        self.player.pause() if self.player.playbackState() == QMediaPlayer.PlayingState else self.player.play()
+        if self.player.playbackState() == QMediaPlayer.PlayingState:
+            self.player.pause()
+            return
+        start, end = self._context_bounds()
+        pos = self.player.position()
+        if self._context_start_ms is not None and start <= pos < end:
+            self._playback_is_bounded = True
+        else:
+            self._playback_is_bounded = False
+        self.player.play()
 
     def _seek_relative(self, milliseconds: int) -> None:
         self._set_bounded_position(self.player.position() + milliseconds)
@@ -626,11 +885,30 @@ class VideoWorkspace(QWidget):
         self.player.pause()
         self._seek_relative(direction * round(1000 / self.source_fps))
 
-    def _refresh_overlay(self, frame_index: int | None = None) -> None:
+    def _on_video_frame_changed(self, frame: QVideoFrame) -> None:
+        self.video.set_video_frame(frame)
+        self._refresh_overlay()
+
+    def _refresh_overlay(self, frame_index: int | None = None, current_sec: float | None = None) -> None:
+        if current_sec is None:
+            current_sec = max(0.0, self.player.position() / 1000.0)
+        if frame_index is None:
+            frame_index = int(current_sec * self.source_fps)
         self.video.update_state(
             source_width=self.source_width,
             source_height=self.source_height,
-            frame_index=frame_index if frame_index is not None else int(self.player.position() / 1000 * self.source_fps),
+            frame_index=frame_index,
+            current_sec=current_sec,
+            roi=self.roi,
+            store=self.store,
+            show_boxes=self.show_boxes.isChecked(),
+            show_roi=self.show_roi.isChecked(),
+        )
+        self.overlay.update_state(
+            source_width=self.source_width,
+            source_height=self.source_height,
+            frame_index=frame_index,
+            current_sec=current_sec,
             roi=self.roi,
             store=self.store,
             show_boxes=self.show_boxes.isChecked(),
@@ -638,7 +916,30 @@ class VideoWorkspace(QWidget):
         )
 
 
+def _silence_ffmpeg_logs() -> None:
+    """Silence C-level FFmpeg log output (e.g. 'Could not find ref with POC') emitted by PySide6 multimedia."""
+    import ctypes
+    import glob
+    import os
+
+    import PySide6
+
+    os.environ["QT_LOGGING_RULES"] = "qt.multimedia*=false;qt.multimedia.ffmpeg*=false"
+    os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "-8"
+    os.environ["AV_LOG_LEVEL"] = "-8"
+
+    pyside_dir = os.path.dirname(PySide6.__file__)
+    for dll in glob.glob(os.path.join(pyside_dir, "avutil*.dll")):
+        try:
+            lib = ctypes.CDLL(dll)
+            lib.av_log_set_level(-8)  # AV_LOG_QUIET = -8
+        except Exception:
+            pass
+
+
 def main() -> int:
+    _silence_ffmpeg_logs()
+
     from .processed_window import ProcessedMainWindow
 
     app = QApplication(sys.argv)

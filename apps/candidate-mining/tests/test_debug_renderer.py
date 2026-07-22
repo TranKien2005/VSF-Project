@@ -3,7 +3,17 @@ from candidate_mining.debug_renderer import held_detections_by_frame
 
 
 def detection(frame: int, track_id: int = 1) -> StoredDetection:
-    return StoredDetection(frame, frame / 30.0, (10.0, 20.0, 30.0, 50.0), 0.8, track_id, f"episode_{track_id}")
+    return StoredDetection(
+        frame,
+        frame / 30.0,
+        (10.0, 20.0, 30.0, 50.0),
+        0.8,
+        track_id,
+        f"episode_{track_id}",
+        (20.0, 50.0),
+        30.0,
+        True,
+    )
 
 
 def test_viewer_holds_last_5fps_snapshot_until_next_sample() -> None:

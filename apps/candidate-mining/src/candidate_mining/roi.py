@@ -30,6 +30,7 @@ class TrackRoi:
     end_extension_normalized: Point
     tracking_region_normalized: tuple[Point, ...]
     scope: str = SCOPE
+    invert_partition: bool = False
 
     def validate(self) -> None:
         width, height = self.reference_frame_size_px
@@ -37,7 +38,7 @@ class TrackRoi:
             raise ValueError("ROI revision and reference frame dimensions must be positive")
         if self.scope != SCOPE or not self.reference_source_sha256.strip():
             raise ValueError("ROI must have review-assistance scope and source checksum")
-        derived = derive_track_region(self.stroke_points_normalized)
+        derived = derive_track_region(self.stroke_points_normalized, invert_partition=self.invert_partition)
         if _distance_sq(derived.start_extension[0], self.start_extension_normalized) > _EPSILON**2:
             raise ValueError("ROI start tangent extension does not match the saved stroke")
         if _distance_sq(derived.end_extension[0], self.end_extension_normalized) > _EPSILON**2:
@@ -54,8 +55,10 @@ class TrackRoi:
         reference_timestamp_sec: float,
         reference_frame_size_px: tuple[int, int],
         stroke_points_normalized: tuple[Point, ...],
+        invert_partition: bool = False,
+        scope: str = SCOPE,
     ) -> TrackRoi:
-        region = derive_track_region(stroke_points_normalized)
+        region = derive_track_region(stroke_points_normalized, invert_partition=invert_partition)
         return cls(
             revision=revision,
             reference_source_sha256=reference_source_sha256,
@@ -65,6 +68,19 @@ class TrackRoi:
             start_extension_normalized=region.start_extension[0],
             end_extension_normalized=region.end_extension[0],
             tracking_region_normalized=region.tracking_region,
+            scope=scope,
+            invert_partition=invert_partition,
+        )
+
+    def flip_partition(self) -> TrackRoi:
+        return self.create(
+            revision=self.revision,
+            reference_source_sha256=self.reference_source_sha256,
+            reference_timestamp_sec=self.reference_timestamp_sec,
+            reference_frame_size_px=self.reference_frame_size_px,
+            stroke_points_normalized=self.stroke_points_normalized,
+            invert_partition=not self.invert_partition,
+            scope=self.scope,
         )
 
     def to_dict(self) -> dict[str, object]:
@@ -82,6 +98,7 @@ class TrackRoi:
             "start_extension_normalized": list(self.start_extension_normalized),
             "end_extension_normalized": list(self.end_extension_normalized),
             "tracking_region_normalized": [list(point) for point in self.tracking_region_normalized],
+            "invert_partition": self.invert_partition,
             "snapshot_sha256": self.snapshot_hash(),
         }
 
@@ -102,6 +119,7 @@ class TrackRoi:
             end_extension_normalized=_read_point(raw["end_extension_normalized"]),
             tracking_region_normalized=tuple(_read_point(value) for value in raw["tracking_region_normalized"]),  # type: ignore[arg-type]
             scope=str(raw["scope"]),
+            invert_partition=bool(raw.get("invert_partition", False)),
         )
         roi.validate()
         return roi
@@ -117,8 +135,8 @@ class DerivedTrackRegion:
     tracking_region: tuple[Point, ...]
 
 
-def derive_track_region(points: tuple[Point, ...]) -> DerivedTrackRegion:
-    """Close a simple freehand stroke using its outward endpoint derivatives."""
+def derive_track_region(points: tuple[Point, ...], *, invert_partition: bool = False) -> DerivedTrackRegion:
+    """Close a simple freehand stroke using self-closed loop detection or endpoint boundary derivatives."""
     stroke = _compact(points)
     if len(stroke) < 2:
         raise ValueError("Draw a stroke with at least two distinct points")
@@ -128,9 +146,25 @@ def derive_track_region(points: tuple[Point, ...]) -> DerivedTrackRegion:
         raise ValueError("Freehand stroke must not cross itself; redraw it")
     start = stroke[0]
     end = stroke[-1]
+    dist_start_end = math.hypot(start[0] - end[0], start[1] - end[1])
+
+    # Smart Mode 1: Self-closed loop inside frame (when start & end are close together)
+    if dist_start_end <= 0.18:
+        closed_polygon = _compact((*stroke, start))
+        area = abs(_polygon_area(closed_polygon))
+        if area > _EPSILON:
+            return DerivedTrackRegion((start,), (start,), closed_polygon)
+
+    # Smart Mode 2: Open partitioning stroke (extending rays to frame boundary)
     start_boundary = _ray_to_boundary(start, _outward_tangent(stroke, at_start=True))
     end_boundary = _ray_to_boundary(end, _outward_tangent(stroke, at_start=False))
     barrier = (start_boundary, *stroke, end_boundary)
+    if _self_intersects(barrier):
+        start_boundary = _nearest_boundary_point(start)
+        end_boundary = _nearest_boundary_point(end)
+        barrier = (start_boundary, *stroke, end_boundary)
+        if _self_intersects(barrier):
+            raise ValueError("Freehand stroke self-intersects when extended to frame boundary; redraw it")
     if _polyline_intersects_boundary(stroke):
         raise ValueError("Stroke may touch the frame only at its endpoints; redraw it")
     forward_boundary = _boundary_path(end_boundary, start_boundary, clockwise=True)
@@ -140,7 +174,8 @@ def derive_track_region(points: tuple[Point, ...]) -> DerivedTrackRegion:
     first_area, second_area = abs(_polygon_area(first)), abs(_polygon_area(second))
     if first_area <= _EPSILON or second_area <= _EPSILON:
         raise ValueError("Stroke does not create two non-empty connected frame regions")
-    return DerivedTrackRegion((start_boundary,), (end_boundary,), first if first_area <= second_area else second)
+    chosen = first if (first_area <= second_area) != invert_partition else second
+    return DerivedTrackRegion((start_boundary,), (end_boundary,), chosen)
 
 
 def normalized_to_pixel(point: Point, width: int, height: int) -> Point:
@@ -188,15 +223,33 @@ def write_roi(roi: TrackRoi, path: Path) -> Path:
 
 
 def _outward_tangent(points: tuple[Point, ...], *, at_start: bool) -> Point:
-    count = min(5, len(points) - 1)
+    count = max(1, min(15, len(points) // 5, len(points) - 1))
     if at_start:
         vector = (points[0][0] - points[count][0], points[0][1] - points[count][1])
     else:
         vector = (points[-1][0] - points[-1 - count][0], points[-1][1] - points[-1 - count][1])
     length = math.hypot(*vector)
     if length <= _EPSILON:
+        vector = (
+            (points[0][0] - points[-1][0], points[0][1] - points[-1][1])
+            if at_start
+            else (points[-1][0] - points[0][0], points[-1][1] - points[0][1])
+        )
+        length = math.hypot(*vector)
+    if length <= _EPSILON:
         raise ValueError("Endpoint tangent is undefined; redraw the stroke")
     return vector[0] / length, vector[1] / length
+
+
+def _nearest_boundary_point(point: Point) -> Point:
+    x, y = point
+    candidates = [
+        (x, (0.0, y)),
+        (1.0 - x, (1.0, y)),
+        (y, (x, 0.0)),
+        (1.0 - y, (x, 1.0)),
+    ]
+    return min(candidates, key=lambda item: item[0])[1]
 
 
 def _ray_to_boundary(point: Point, direction: Point) -> Point:
@@ -220,10 +273,9 @@ def _boundary_path(start: Point, end: Point, *, clockwise: bool) -> tuple[Point,
     start_t, end_t = _perimeter_coordinate(start), _perimeter_coordinate(end)
     if not clockwise:
         start_t, end_t = 4.0 - start_t, 4.0 - end_t
-        corners = tuple(reversed(corners))
     if end_t < start_t:
         end_t += 4.0
-    result: list[Point] = []
+    corner_entries: list[tuple[float, Point]] = []
     for corner in corners:
         corner_t = _perimeter_coordinate(corner)
         if not clockwise:
@@ -231,8 +283,9 @@ def _boundary_path(start: Point, end: Point, *, clockwise: bool) -> tuple[Point,
         while corner_t < start_t:
             corner_t += 4.0
         if start_t + _EPSILON < corner_t < end_t - _EPSILON:
-            result.append(corner)
-    return tuple(result)
+            corner_entries.append((corner_t, corner))
+    corner_entries.sort(key=lambda item: item[0])
+    return tuple(corner for _, corner in corner_entries)
 
 
 def _perimeter_coordinate(point: Point) -> float:

@@ -8,6 +8,8 @@ def test_repository_root_and_default_config_are_resolved() -> None:
     assert config.paths.processed_dir == config.root / "data" / "processed"
     assert config.paths.results_dir == config.root / "data" / "results"
     assert config.paths.ffmpeg_dir == config.root / "tools" / "ffmpeg"
-    assert config.pipeline.sample_fps == 5.0
-    assert config.pipeline.pre_roll_seconds == 5.0
-    assert config.pipeline.post_roll_seconds == 5.0
+    assert config.pipeline.sample_fps == 2.0
+    assert config.pipeline.pre_roll_seconds == 2.0
+    assert config.pipeline.post_roll_seconds == 2.0
+    assert config.providers.person_rtdetr["confidence_threshold"] == 0.3
+    assert config.providers.person_rtdetr["movement_threshold_ratio"] == 0.2
