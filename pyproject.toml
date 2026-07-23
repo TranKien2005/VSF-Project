@@ -26,12 +26,13 @@ dev = [
 [project.scripts]
 candidate-mining = "candidate_mining.cli:app"
 candidate-mining-gui = "candidate_mining.gui.app:main"
+annotation-tool-gui = "annotation_tool.gui.app:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["apps/candidate-mining/src/candidate_mining"]
+packages = ["apps/candidate-mining/src/candidate_mining", "apps/annotation-tool/src/annotation_tool"]
 
 [tool.pytest.ini_options]
-testpaths = ["apps/candidate-mining/tests"]
+testpaths = ["apps/candidate-mining/tests", "apps/annotation-tool/tests"]
 addopts = "-ra"
 
 [tool.ruff]

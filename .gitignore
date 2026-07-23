@@ -15,9 +15,12 @@ Thumbs.db
 # Sensitive local processed-source metadata, technical candidates, and runtime logs
 data/processed/**
 data/results/**
+data/labels/
 outputs/logs/**
 
-# Local model artifacts and framework caches
+# Local model artifacts, weights, media files, and framework caches
+*.mp4
+*.pt
 models/cache/**
 models/weights/**
 .cache/torch/**

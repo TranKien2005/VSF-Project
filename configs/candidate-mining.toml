@@ -2,6 +2,7 @@
 # Local sensitive metadata and technical candidate artifacts. Imported videos remain external.
 processed_dir = "data/processed"
 results_dir = "data/results"
+labels_dir = "data/labels"
 log_dir = "outputs/logs"
 model_weights_dir = "models/weights"
 torch_cache_dir = ".cache/torch"
